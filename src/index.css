@@ -1,0 +1,14 @@
+:root {
+  font-family: system-ui, 'Microsoft JhengHei', -apple-system, sans-serif;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f4f5f7;
+  color: #1f2430;
+}
