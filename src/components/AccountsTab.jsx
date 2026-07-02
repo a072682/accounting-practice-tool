@@ -5,6 +5,18 @@ import { sortAccountsByCode } from '../utils/accounting';
 
 const emptyForm = { code: '', name: '', type: '資產', parent: '', isSummary: false };
 
+// 當「上層科目代號」留空時，依代號前綴自動找出現有科目中最長匹配的作為上層科目
+function inferParentCode(accounts, code, excludeId) {
+  let best = null;
+  accounts.forEach((a) => {
+    if (a.id === excludeId || a.code === code) return;
+    if (code.startsWith(a.code) && (!best || a.code.length > best.length)) {
+      best = a.code;
+    }
+  });
+  return best;
+}
+
 export default function AccountsTab() {
   const { accounts, addAccount, updateAccount, deleteAccount, loadStandardAccounts } = useApp();
   const [form, setForm] = useState(emptyForm);
@@ -32,11 +44,13 @@ export default function AccountsTab() {
       setError('此代號已存在');
       return;
     }
+    const code = form.code.trim();
+    const parent = form.parent.trim() || inferParentCode(accounts, code, editingId);
     const payload = {
-      code: form.code.trim(),
+      code,
       name: form.name.trim(),
       type: form.type,
-      parent: form.parent.trim() || null,
+      parent,
       isSummary: form.isSummary,
     };
     if (editingId) {
@@ -101,7 +115,7 @@ export default function AccountsTab() {
           ))}
         </select>
         <input
-          placeholder="上層科目代號 (彙總科目留空)"
+          placeholder="上層科目代號 (留空則依代號前綴自動判斷)"
           value={form.parent}
           onChange={(e) => setForm({ ...form, parent: e.target.value })}
         />
