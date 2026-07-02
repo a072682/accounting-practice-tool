@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react';
-import { defaultAccounts } from '../data/defaultAccounts';
+import { createAccountsFromTemplates, defaultAccounts, standardAccountTemplates } from '../data/defaultAccounts';
 
 const AppContext = createContext(null);
 
@@ -43,6 +43,20 @@ export function AppProvider({ children }) {
     if (data.entries) setEntries(data.entries);
   }
 
+  // 將標準科目表合併進現有科目：代號已存在者略過，不覆蓋使用者的自訂/修改
+  // 回傳實際新增的科目數量
+  function loadStandardAccounts() {
+    let addedCount = 0;
+    setAccounts((prev) => {
+      const existingCodes = new Set(prev.map((a) => a.code));
+      const missingTemplates = standardAccountTemplates.filter((tpl) => !existingCodes.has(tpl.code));
+      addedCount = missingTemplates.length;
+      if (missingTemplates.length === 0) return prev;
+      return [...prev, ...createAccountsFromTemplates(missingTemplates)];
+    });
+    return addedCount;
+  }
+
   const value = {
     accounts,
     openingBalances,
@@ -54,6 +68,7 @@ export function AppProvider({ children }) {
     addEntry,
     deleteEntry,
     importData,
+    loadStandardAccounts,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

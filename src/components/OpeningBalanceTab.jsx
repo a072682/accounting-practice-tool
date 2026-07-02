@@ -25,17 +25,21 @@ export default function OpeningBalanceTab() {
         </thead>
         <tbody>
           {sorted.map((acc) => (
-            <tr key={acc.id}>
+            <tr key={acc.id} className={acc.isSummary ? 'summary-row' : ''}>
               <td>{acc.code}</td>
-              <td>{acc.name}</td>
+              <td>{acc.name}{acc.isSummary ? '（彙總）' : ''}</td>
               <td>{acc.type}</td>
               <td className="num-cell">
-                <input
-                  type="number"
-                  className="num-input"
-                  value={openingBalances[acc.id] ?? ''}
-                  onChange={(e) => setOpeningBalance(acc.id, e.target.value === '' ? '' : Number(e.target.value))}
-                />
+                {acc.isSummary ? (
+                  '—'
+                ) : (
+                  <input
+                    type="number"
+                    className="num-input"
+                    value={openingBalances[acc.id] ?? ''}
+                    onChange={(e) => setOpeningBalance(acc.id, e.target.value === '' ? '' : Number(e.target.value))}
+                  />
+                )}
               </td>
             </tr>
           ))}

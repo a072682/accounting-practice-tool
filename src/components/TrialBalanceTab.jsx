@@ -3,7 +3,7 @@ import { computeEndingBalances, formatNumber, isDebitNormal, sortAccountsByCode 
 
 export default function TrialBalanceTab() {
   const { accounts, openingBalances, entries } = useApp();
-  const sorted = sortAccountsByCode(accounts);
+  const sorted = sortAccountsByCode(accounts.filter((a) => !a.isSummary));
   const balances = computeEndingBalances(accounts, openingBalances, entries);
 
   let debitTotal = 0;

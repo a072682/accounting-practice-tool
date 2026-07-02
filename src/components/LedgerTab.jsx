@@ -4,7 +4,7 @@ import { formatNumber, isDebitNormal, sortAccountsByCode } from '../utils/accoun
 
 export default function LedgerTab() {
   const { accounts, openingBalances, entries } = useApp();
-  const sorted = sortAccountsByCode(accounts);
+  const sorted = sortAccountsByCode(accounts.filter((a) => !a.isSummary));
   const [accountId, setAccountId] = useState(sorted[0]?.id || '');
 
   const account = accounts.find((a) => a.id === accountId);

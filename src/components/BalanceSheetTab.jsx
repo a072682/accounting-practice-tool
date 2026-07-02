@@ -5,16 +5,16 @@ export default function BalanceSheetTab() {
   const { accounts, openingBalances, entries } = useApp();
   const balances = computeEndingBalances(accounts, openingBalances, entries);
 
-  const assets = sortAccountsByCode(accounts.filter((a) => a.type === '資產'));
-  const liabilities = sortAccountsByCode(accounts.filter((a) => a.type === '負債'));
-  const equities = sortAccountsByCode(accounts.filter((a) => a.type === '權益'));
+  const assets = sortAccountsByCode(accounts.filter((a) => a.type === '資產' && !a.isSummary));
+  const liabilities = sortAccountsByCode(accounts.filter((a) => a.type === '負債' && !a.isSummary));
+  const equities = sortAccountsByCode(accounts.filter((a) => a.type === '權益' && !a.isSummary));
 
   const assetTotal = sumByTypes(accounts, balances, ['資產']);
   const liabilityTotal = sumByTypes(accounts, balances, ['負債']);
   const equityBase = sumByTypes(accounts, balances, ['權益']);
 
-  const revenueTotal = sumByTypes(accounts, balances, ['收入']);
-  const expenseTotal = sumByTypes(accounts, balances, ['費用']);
+  const revenueTotal = sumByTypes(accounts, balances, ['收益']);
+  const expenseTotal = sumByTypes(accounts, balances, ['費損']);
   const netIncome = revenueTotal - expenseTotal;
 
   const equityTotal = equityBase + netIncome;

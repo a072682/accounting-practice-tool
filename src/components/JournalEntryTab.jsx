@@ -57,7 +57,7 @@ function LineEditor({ label, lines, setLines, accounts }) {
 
 export default function JournalEntryTab() {
   const { accounts, entries, addEntry, deleteEntry } = useApp();
-  const sorted = sortAccountsByCode(accounts);
+  const selectableAccounts = sortAccountsByCode(accounts.filter((a) => !a.isSummary));
   const [date, setDate] = useState(today());
   const [description, setDescription] = useState('');
   const [debits, setDebits] = useState([emptyLine()]);
@@ -127,8 +127,8 @@ export default function JournalEntryTab() {
         </div>
 
         <div className="entry-lines">
-          <LineEditor label="借方" lines={debits} setLines={setDebits} accounts={sorted} />
-          <LineEditor label="貸方" lines={credits} setLines={setCredits} accounts={sorted} />
+          <LineEditor label="借方" lines={debits} setLines={setDebits} accounts={selectableAccounts} />
+          <LineEditor label="貸方" lines={credits} setLines={setCredits} accounts={selectableAccounts} />
         </div>
 
         <div className="entry-check">
