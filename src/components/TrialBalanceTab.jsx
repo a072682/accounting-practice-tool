@@ -11,7 +11,7 @@ export default function TrialBalanceTab() {
 
   const rows = sorted.map((acc) => {
     const balance = balances[acc.id] || 0;
-    const debitNormal = isDebitNormal(acc.type);
+    const debitNormal = isDebitNormal(acc);
     let debitAmount = 0;
     let creditAmount = 0;
     if (debitNormal) {

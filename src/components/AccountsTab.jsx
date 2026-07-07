@@ -1,9 +1,20 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { ACCOUNT_TYPES } from '../data/defaultAccounts';
+import { ACCOUNT_TYPES, NORMAL_BALANCE_SIDES, defaultNormalBalance } from '../data/defaultAccounts';
 import { sortAccountsByCode } from '../utils/accounting';
 
-const emptyForm = { code: '', name: '', type: '資產', parent: '', isSummary: false };
+const emptyForm = {
+  code: '',
+  name: '',
+  type: '資產',
+  parent: '',
+  isSummary: false,
+  isInventory: false,
+  isFixedAsset: false,
+  depreciationAccountCode: '',
+  isNoteAccount: false,
+  normalBalance: defaultNormalBalance('資產'),
+};
 
 // 當「上層科目代號」留空時，依代號前綴自動找出現有科目中最長匹配的作為上層科目
 function inferParentCode(accounts, code, excludeId) {
@@ -52,6 +63,11 @@ export default function AccountsTab() {
       type: form.type,
       parent,
       isSummary: form.isSummary,
+      isInventory: form.isSummary ? false : form.isInventory,
+      isFixedAsset: form.isSummary ? false : form.isFixedAsset,
+      depreciationAccountCode: form.isFixedAsset ? form.depreciationAccountCode.trim() || null : null,
+      isNoteAccount: form.isSummary ? false : form.isNoteAccount,
+      normalBalance: form.normalBalance,
     };
     if (editingId) {
       updateAccount(editingId, payload);
@@ -69,12 +85,17 @@ export default function AccountsTab() {
       type: acc.type,
       parent: acc.parent || '',
       isSummary: !!acc.isSummary,
+      isInventory: !!acc.isInventory,
+      isFixedAsset: !!acc.isFixedAsset,
+      depreciationAccountCode: acc.depreciationAccountCode || '',
+      isNoteAccount: !!acc.isNoteAccount,
+      normalBalance: acc.normalBalance || defaultNormalBalance(acc.type),
     });
     setError('');
   }
 
   function handleDelete(id) {
-    if (window.confirm('確定要刪除此科目嗎？相關的期初餘額也會一併清除。')) {
+    if (window.confirm('確定要刪除此科目嗎？相關的期初餘額（及存貨品項明細、資產卡、票據明細卡）也會一併清除。')) {
       deleteAccount(id);
       if (editingId === id) resetForm();
     }
@@ -107,10 +128,20 @@ export default function AccountsTab() {
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
         />
-        <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+        <select
+          value={form.type}
+          onChange={(e) => setForm({ ...form, type: e.target.value, normalBalance: defaultNormalBalance(e.target.value) })}
+        >
           {ACCOUNT_TYPES.map((t) => (
             <option key={t} value={t}>
               {t}
+            </option>
+          ))}
+        </select>
+        <select value={form.normalBalance} onChange={(e) => setForm({ ...form, normalBalance: e.target.value })}>
+          {NORMAL_BALANCE_SIDES.map((side) => (
+            <option key={side} value={side}>
+              正常餘額：{side}
             </option>
           ))}
         </select>
@@ -126,6 +157,40 @@ export default function AccountsTab() {
             onChange={(e) => setForm({ ...form, isSummary: e.target.checked })}
           />
           彙總科目
+        </label>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={form.isInventory}
+            disabled={form.isSummary}
+            onChange={(e) => setForm({ ...form, isInventory: e.target.checked })}
+          />
+          存貨科目（啟用品項明細）
+        </label>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={form.isFixedAsset}
+            disabled={form.isSummary}
+            onChange={(e) => setForm({ ...form, isFixedAsset: e.target.checked })}
+          />
+          不動產廠房設備成本科目（啟用資產卡）
+        </label>
+        {form.isFixedAsset && (
+          <input
+            placeholder="配對累計折舊科目代號 (留空表示不提折舊，如土地)"
+            value={form.depreciationAccountCode}
+            onChange={(e) => setForm({ ...form, depreciationAccountCode: e.target.value })}
+          />
+        )}
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={form.isNoteAccount}
+            disabled={form.isSummary}
+            onChange={(e) => setForm({ ...form, isNoteAccount: e.target.checked })}
+          />
+          票據科目（啟用票據明細卡）
         </label>
         <button type="submit">{editingId ? '更新科目' : '新增科目'}</button>
         {editingId && (
@@ -143,6 +208,7 @@ export default function AccountsTab() {
             <th>代號</th>
             <th>名稱</th>
             <th>類型</th>
+            <th>正常餘額</th>
             <th>上層科目</th>
             <th>科目性質</th>
             <th>操作</th>
@@ -154,8 +220,14 @@ export default function AccountsTab() {
               <td>{acc.code}</td>
               <td>{acc.name}</td>
               <td>{acc.type}</td>
+              <td>{acc.normalBalance || defaultNormalBalance(acc.type)}</td>
               <td>{acc.parent || '—'}</td>
-              <td>{acc.isSummary ? '彙總' : '明細'}</td>
+              <td>
+                {acc.isSummary ? '彙總' : '明細'}
+                {acc.isInventory ? '／存貨' : ''}
+                {acc.isFixedAsset ? `／固定資產${acc.depreciationAccountCode ? `（折舊科目：${acc.depreciationAccountCode}）` : '（不提折舊）'}` : ''}
+                {acc.isNoteAccount ? '／票據' : ''}
+              </td>
               <td>
                 <button onClick={() => handleEdit(acc)}>編輯</button>
                 <button onClick={() => handleDelete(acc.id)}>刪除</button>

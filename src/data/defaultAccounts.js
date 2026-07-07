@@ -2,14 +2,48 @@
 // type: 資產 / 負債 / 權益 / 收益 / 費損
 // parent: 上層科目代號（彙總科目留空 null）
 // isSummary: true 表示彙總科目，僅用於報表分類加總，不可作為分錄借貸對象
+// normalBalance: 借方 / 貸方，該科目的「正常餘額方向」。多數科目可依 type 推定，
+//   但備抵損失、累計折舊、銷貨退回/折讓、進貨退出/折讓等「抵銷科目」的正常餘額方向
+//   與其所屬 type 相反，需個別指定。
 
 export const ACCOUNT_TYPES = ['資產', '負債', '權益', '收益', '費損'];
+export const NORMAL_BALANCE_SIDES = ['借方', '貸方'];
+export const DEPRECIATION_METHODS = ['直線法', '倍數餘額遞減法'];
 
-// 借方為正常餘額方（借增貸減）的類型
+// 借方為正常餘額方（借增貸減）的類型（僅作為推定預設值使用，實際判斷一律以科目的 normalBalance 為準）
 export const DEBIT_NORMAL_TYPES = ['資產', '費損'];
 
-function t(code, name, type, parent = null, isSummary = false) {
-  return { code, name, type, parent, isSummary };
+export function defaultNormalBalance(type) {
+  return DEBIT_NORMAL_TYPES.includes(type) ? '借方' : '貸方';
+}
+
+// isFixedAsset: true 表示此為「成本」科目，可建立資產卡（見【不動產廠房設備資產卡】功能）
+// depreciationAccountCode: 配對的累計折舊（抵銷）科目代號；留空表示不提折舊（如土地）
+// isNoteAccount: true 表示此為票據科目（應收票據／應付票據），可建立票據明細卡
+function t(
+  code,
+  name,
+  type,
+  parent = null,
+  isSummary = false,
+  isInventory = false,
+  normalBalanceOverride = null,
+  isFixedAsset = false,
+  depreciationAccountCode = null,
+  isNoteAccount = false
+) {
+  return {
+    code,
+    name,
+    type,
+    parent,
+    isSummary,
+    isInventory,
+    normalBalance: normalBalanceOverride || defaultNormalBalance(type),
+    isFixedAsset,
+    depreciationAccountCode,
+    isNoteAccount,
+  };
 }
 
 export const standardAccountTemplates = [
@@ -20,17 +54,17 @@ export const standardAccountTemplates = [
   t('1120', '各項金融資產－流動', '資產', null, true),
   t('1121', '各項金融資產－流動', '資產', '1120'),
   t('1130', '應收票據', '資產', null, true),
-  t('1131', '應收票據', '資產', '1130'),
-  t('1132', '備抵損失－應收票據', '資產', '1130'),
+  t('1131', '應收票據', '資產', '1130', false, false, null, false, null, true),
+  t('1132', '備抵損失－應收票據', '資產', '1130', false, false, '貸方'),
   t('1140', '應收帳款', '資產', null, true),
   t('1141', '應收帳款', '資產', '1140'),
-  t('1142', '備抵損失－應收帳款', '資產', '1140'),
+  t('1142', '備抵損失－應收帳款', '資產', '1140', false, false, '貸方'),
   t('1150', '其他應收款', '資產', null, true),
   t('1151', '應收收益', '資產', '1150'),
   t('1152', '應收退稅款', '資產', '1150'),
   t('1153', '其他應收款', '資產', '1150'),
   t('1160', '存貨', '資產', null, true),
-  t('1161', '存貨', '資產', '1160'),
+  t('1161', '存貨', '資產', '1160', false, true),
   t('1170', '生物資產－流動', '資產', null, true),
   t('1171', '各項生物資產－流動', '資產', '1170'),
   t('1180', '預付款項', '資產', null, true),
@@ -47,23 +81,23 @@ export const standardAccountTemplates = [
   t('1210', '各項金融資產－非流動', '資產', null, true),
   t('1211', '各項金融資產－非流動', '資產', '1210'),
   t('1220', '不動產、廠房及設備', '資產', null, true),
-  t('1221', '土地成本', '資產', '1220'),
-  t('1222', '房屋及建築成本', '資產', '1220'),
-  t('1223', '累計折舊－房屋及建築', '資產', '1220'),
-  t('1224', '機器設備成本', '資產', '1220'),
-  t('1225', '累計折舊－機器設備', '資產', '1220'),
-  t('1226', '運輸設備成本', '資產', '1220'),
-  t('1227', '累計折舊－運輸設備', '資產', '1220'),
-  t('1228', '辦公設備成本', '資產', '1220'),
-  t('1229', '累計折舊－辦公設備', '資產', '1220'),
+  t('1221', '土地成本', '資產', '1220', false, false, null, true, null),
+  t('1222', '房屋及建築成本', '資產', '1220', false, false, null, true, '1223'),
+  t('1223', '累計折舊－房屋及建築', '資產', '1220', false, false, '貸方'),
+  t('1224', '機器設備成本', '資產', '1220', false, false, null, true, '1225'),
+  t('1225', '累計折舊－機器設備', '資產', '1220', false, false, '貸方'),
+  t('1226', '運輸設備成本', '資產', '1220', false, false, null, true, '1227'),
+  t('1227', '累計折舊－運輸設備', '資產', '1220', false, false, '貸方'),
+  t('1228', '辦公設備成本', '資產', '1220', false, false, null, true, '1229'),
+  t('1229', '累計折舊－辦公設備', '資產', '1220', false, false, '貸方'),
   t('1230', '無形資產', '資產', null, true),
   t('1231', '商標權', '資產', '1230'),
   t('1232', '專利權', '資產', '1230'),
-  t('1233', '累計攤銷－專利權', '資產', '1230'),
+  t('1233', '累計攤銷－專利權', '資產', '1230', false, false, '貸方'),
   t('1234', '著作權', '資產', '1230'),
-  t('1235', '累計攤銷－著作權', '資產', '1230'),
+  t('1235', '累計攤銷－著作權', '資產', '1230', false, false, '貸方'),
   t('1236', '電腦軟體', '資產', '1230'),
-  t('1237', '累計攤銷－電腦軟體', '資產', '1230'),
+  t('1237', '累計攤銷－電腦軟體', '資產', '1230', false, false, '貸方'),
   t('1238', '商譽', '資產', '1230'),
   t('1240', '生物資產－非流動', '資產', null, true),
   t('1241', '各項生物資產－非流動', '資產', '1240'),
@@ -80,7 +114,7 @@ export const standardAccountTemplates = [
   t('2121', '預收貨款', '負債', '2120'),
   t('2122', '預收收入', '負債', '2120'),
   t('2130', '應付票據', '負債', null, true),
-  t('2131', '應付票據', '負債', '2130'),
+  t('2131', '應付票據', '負債', '2130', false, false, null, false, null, true),
   t('2140', '應付帳款', '負債', null, true),
   t('2141', '應付帳款', '負債', '2140'),
   t('2150', '其他應付款', '負債', null, true),
@@ -119,8 +153,8 @@ export const standardAccountTemplates = [
 
   // ===== 4xxx 收益 =====
   t('4101', '銷貨收入', '收益'),
-  t('4102', '銷貨退回', '收益'),
-  t('4103', '銷貨折讓', '收益'),
+  t('4102', '銷貨退回', '收益', null, false, false, '借方'),
+  t('4103', '銷貨折讓', '收益', null, false, false, '借方'),
   t('4104', '勞務收入', '收益'),
   t('4201', '其他收入', '收益'),
   t('4202', '利息收入', '收益'),
@@ -134,8 +168,8 @@ export const standardAccountTemplates = [
   t('5101', '銷貨成本', '費損'),
   t('5102', '進貨', '費損'),
   t('5103', '進貨費用', '費損'),
-  t('5104', '進貨退出', '費損'),
-  t('5105', '進貨折讓', '費損'),
+  t('5104', '進貨退出', '費損', null, false, false, '貸方'),
+  t('5105', '進貨折讓', '費損', null, false, false, '貸方'),
   t('5106', '勞務成本', '費損'),
   t('5201', '薪資支出', '費損'),
   t('5202', '租金支出', '費損'),
@@ -159,7 +193,7 @@ export const standardAccountTemplates = [
   t('5220', '研究發展費用', '費損'),
   t('5221', '其他費用', '費損'),
   t('5222', '預期信用減損損失', '費損'),
-  t('5223', '預期信用減損利益', '費損'),
+  t('5223', '預期信用減損利益', '費損', null, false, false, '貸方'),
   t('5301', '其他損失', '費損'),
   t('5302', '利息費用', '費損'),
   t('5303', '處分不動產、廠房及設備損失', '費損'),

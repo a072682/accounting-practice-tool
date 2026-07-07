@@ -4,6 +4,8 @@ import AccountsTab from './components/AccountsTab';
 import OpeningBalanceTab from './components/OpeningBalanceTab';
 import JournalEntryTab from './components/JournalEntryTab';
 import LedgerTab from './components/LedgerTab';
+import InventoryDetailTab from './components/InventoryDetailTab';
+import NoteDetailTab from './components/NoteDetailTab';
 import TrialBalanceTab from './components/TrialBalanceTab';
 import IncomeStatementTab from './components/IncomeStatementTab';
 import BalanceSheetTab from './components/BalanceSheetTab';
@@ -15,6 +17,8 @@ const TABS = [
   { key: 'opening', label: '開帳', Component: OpeningBalanceTab },
   { key: 'entries', label: '分錄登錄', Component: JournalEntryTab },
   { key: 'ledger', label: '分類帳', Component: LedgerTab },
+  { key: 'inventory', label: '存貨明細表', Component: InventoryDetailTab },
+  { key: 'notes', label: '票據明細表', Component: NoteDetailTab },
   { key: 'trial', label: '試算表', Component: TrialBalanceTab },
   { key: 'income', label: '損益表', Component: IncomeStatementTab },
   { key: 'balance', label: '資產負債表', Component: BalanceSheetTab },

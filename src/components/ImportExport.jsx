@@ -2,11 +2,11 @@ import { useRef } from 'react';
 import { useApp } from '../context/AppContext';
 
 export default function ImportExport() {
-  const { accounts, openingBalances, entries, importData } = useApp();
+  const { accounts, openingBalances, inventoryItems, fixedAssetCards, noteCards, entries, importData } = useApp();
   const fileInputRef = useRef(null);
 
   function handleExport() {
-    const data = { accounts, openingBalances, entries };
+    const data = { accounts, openingBalances, inventoryItems, fixedAssetCards, noteCards, entries };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

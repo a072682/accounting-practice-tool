@@ -1,18 +1,30 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatNumber, isDebitNormal, sortAccountsByCode } from '../utils/accounting';
+import { formatNumber, isDebitNormal, openingNetBalance, sortAccountsByCode } from '../utils/accounting';
 
 export default function LedgerTab() {
-  const { accounts, openingBalances, entries } = useApp();
+  const { accounts, openingBalances, inventoryItems, noteCards, entries } = useApp();
   const sorted = sortAccountsByCode(accounts.filter((a) => !a.isSummary));
   const [accountId, setAccountId] = useState(sorted[0]?.id || '');
 
   const account = accounts.find((a) => a.id === accountId);
 
+  function itemInfo(line) {
+    if (!line.itemId) return '';
+    const item = inventoryItems.find((it) => it.id === line.itemId);
+    return ` ［${item?.name || '(已刪除品項)'} x ${formatNumber(line.qty)}］`;
+  }
+
+  function noteInfo(line) {
+    if (!line.noteId) return '';
+    const card = noteCards.find((c) => c.id === line.noteId);
+    return card ? ` ［${card.party || '(未命名)'}／${card.noteNumber || '(無號碼)'}］` : ' ［已刪除票據］';
+  }
+
   const rows = [];
   if (account) {
-    let running = Number(openingBalances[account.id] || 0);
-    const debitNormal = isDebitNormal(account.type);
+    let running = openingNetBalance(account, openingBalances);
+    const debitNormal = isDebitNormal(account);
     rows.push({ date: '', description: '期初餘額', debit: null, credit: null, balance: running });
 
     entries
@@ -24,7 +36,7 @@ export default function LedgerTab() {
             running += debitNormal ? Number(d.amount) : -Number(d.amount);
             rows.push({
               date: entry.date,
-              description: entry.description,
+              description: entry.description + itemInfo(d) + noteInfo(d),
               debit: Number(d.amount),
               credit: null,
               balance: running,
@@ -36,7 +48,7 @@ export default function LedgerTab() {
             running += debitNormal ? -Number(c.amount) : Number(c.amount);
             rows.push({
               date: entry.date,
-              description: entry.description,
+              description: entry.description + itemInfo(c) + noteInfo(c),
               debit: null,
               credit: Number(c.amount),
               balance: running,
