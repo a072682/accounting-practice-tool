@@ -72,10 +72,23 @@ export function computeEndingBalances(accounts, openingBalances, entries) {
   return balances;
 }
 
+// 該科目所屬 type 的「一般」正常餘額方向：資產／費損通常為借方，負債／權益／收益通常為貸方
+const DEBIT_NORMAL_TYPES = ['資產', '費損'];
+
+// 將科目餘額換算為「相對於其所屬分類」的正負號：
+// 若科目本身的正常餘額方向與所屬分類的一般方向相同 → 原值（正常加項）
+// 若相反（即備抵損失、累計折舊、銷貨退回/折讓、進貨退出/折讓等抵銷科目）→ 反號（作為減項）
+// 讓抵銷科目在資產/負債/權益/收益/費損總計中正確地被扣除，而不是被誤當成一般加項
+export function typeSignedBalance(account, balance) {
+  const typeIsDebitNormal = DEBIT_NORMAL_TYPES.includes(account.type);
+  const isContra = isDebitNormal(account) !== typeIsDebitNormal;
+  return isContra ? -balance : balance;
+}
+
 export function sumByTypes(accounts, balances, types) {
   return accounts
     .filter((acc) => types.includes(acc.type))
-    .reduce((sum, acc) => sum + (balances[acc.id] || 0), 0);
+    .reduce((sum, acc) => sum + typeSignedBalance(acc, balances[acc.id] || 0), 0);
 }
 
 export function entryDebitTotal(entry) {

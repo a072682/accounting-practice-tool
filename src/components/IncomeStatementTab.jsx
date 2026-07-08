@@ -1,15 +1,18 @@
 import { useApp } from '../context/AppContext';
-import { computeEndingBalances, formatNumber, sortAccountsByCode } from '../utils/accounting';
+import { computeEndingBalances, formatNumber, sortAccountsByCode, sumByTypes, typeSignedBalance } from '../utils/accounting';
 
 export default function IncomeStatementTab() {
   const { accounts, openingBalances, entries } = useApp();
   const balances = computeEndingBalances(accounts, openingBalances, entries);
 
+  // 顯示金額：依科目所屬分類換算正負號，讓銷貨退回/折讓、進貨退出/折讓等抵銷科目顯示為負值（減項）
+  const displayAmount = (acc) => typeSignedBalance(acc, balances[acc.id] || 0);
+
   const revenues = sortAccountsByCode(accounts.filter((a) => a.type === '收益' && !a.isSummary));
   const expenses = sortAccountsByCode(accounts.filter((a) => a.type === '費損' && !a.isSummary));
 
-  const revenueTotal = revenues.reduce((s, a) => s + (balances[a.id] || 0), 0);
-  const expenseTotal = expenses.reduce((s, a) => s + (balances[a.id] || 0), 0);
+  const revenueTotal = sumByTypes(accounts, balances, ['收益']);
+  const expenseTotal = sumByTypes(accounts, balances, ['費損']);
   const netIncome = revenueTotal - expenseTotal;
 
   return (
@@ -22,7 +25,7 @@ export default function IncomeStatementTab() {
             <tr key={acc.id}>
               <td>{acc.code}</td>
               <td>{acc.name}</td>
-              <td className="num-cell">{formatNumber(balances[acc.id] || 0)}</td>
+              <td className="num-cell">{formatNumber(displayAmount(acc))}</td>
             </tr>
           ))}
         </tbody>
@@ -41,7 +44,7 @@ export default function IncomeStatementTab() {
             <tr key={acc.id}>
               <td>{acc.code}</td>
               <td>{acc.name}</td>
-              <td className="num-cell">{formatNumber(balances[acc.id] || 0)}</td>
+              <td className="num-cell">{formatNumber(displayAmount(acc))}</td>
             </tr>
           ))}
         </tbody>

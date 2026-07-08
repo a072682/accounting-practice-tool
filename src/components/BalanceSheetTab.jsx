@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { computeEndingBalances, formatNumber, sortAccountsByCode, sumByTypes } from '../utils/accounting';
+import { computeEndingBalances, formatNumber, sortAccountsByCode, sumByTypes, typeSignedBalance } from '../utils/accounting';
 
 // 資產負債表的實際內容：接收「哪一份科目清單＋開帳金額＋分錄」算出的餘額後渲染，
 // 期初／期末兩種視圖共用同一套呈現邏輯，差別只在傳入的資料來源
 function BalanceSheetView({ accounts, balances, hideZero }) {
-  const nonZero = (acc) => !hideZero || Math.abs(balances[acc.id] || 0) > 0.005;
+  // 顯示金額：依科目所屬分類（資產/負債/權益）換算正負號，讓備抵損失、累計折舊等抵銷科目
+  // 顯示為負值（減項），與「資產總計」等總計的計算方式保持一致
+  const displayAmount = (acc) => typeSignedBalance(acc, balances[acc.id] || 0);
+  const nonZero = (acc) => !hideZero || Math.abs(displayAmount(acc)) > 0.005;
 
   const assets = sortAccountsByCode(accounts.filter((a) => a.type === '資產' && !a.isSummary)).filter(nonZero);
   const liabilities = sortAccountsByCode(accounts.filter((a) => a.type === '負債' && !a.isSummary)).filter(nonZero);
@@ -34,7 +37,7 @@ function BalanceSheetView({ accounts, balances, hideZero }) {
                 <tr key={acc.id}>
                   <td>{acc.code}</td>
                   <td>{acc.name}</td>
-                  <td className="num-cell">{formatNumber(balances[acc.id] || 0)}</td>
+                  <td className="num-cell">{formatNumber(displayAmount(acc))}</td>
                 </tr>
               ))}
             </tbody>
@@ -55,7 +58,7 @@ function BalanceSheetView({ accounts, balances, hideZero }) {
                 <tr key={acc.id}>
                   <td>{acc.code}</td>
                   <td>{acc.name}</td>
-                  <td className="num-cell">{formatNumber(balances[acc.id] || 0)}</td>
+                  <td className="num-cell">{formatNumber(displayAmount(acc))}</td>
                 </tr>
               ))}
             </tbody>
@@ -74,7 +77,7 @@ function BalanceSheetView({ accounts, balances, hideZero }) {
                 <tr key={acc.id}>
                   <td>{acc.code}</td>
                   <td>{acc.name}</td>
-                  <td className="num-cell">{formatNumber(balances[acc.id] || 0)}</td>
+                  <td className="num-cell">{formatNumber(displayAmount(acc))}</td>
                 </tr>
               ))}
               {(!hideZero || Math.abs(netIncome) > 0.005) && (
