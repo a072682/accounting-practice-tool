@@ -22,6 +22,8 @@ export function defaultNormalBalance(type) {
 // isNoteAccount: true 表示此為票據科目（應收票據／應付票據），可建立票據明細卡
 // isArApAccount: true 表示此為應收/應付帳款科目，可依客戶/廠商建立明細卡
 // allowanceAccountCode: 配對的備抵損失／呆帳（抵銷）科目代號；留空表示無配對的備抵科目
+// isAdvanceAccount: true 表示此為預付貨款／預收貨款科目，可依對象建立明細卡（僅對象＋金額，等貨到齊後一次沖銷，不分期攤銷）
+// isAmortizedAccount: true 表示此為預付費用／預收收入科目，可建立攤銷明細卡（依生效日期＋攤銷期間分期認列）
 function t(
   code,
   name,
@@ -34,7 +36,9 @@ function t(
   depreciationAccountCode = null,
   isNoteAccount = false,
   isArApAccount = false,
-  allowanceAccountCode = null
+  allowanceAccountCode = null,
+  isAdvanceAccount = false,
+  isAmortizedAccount = false
 ) {
   return {
     code,
@@ -49,6 +53,8 @@ function t(
     isNoteAccount,
     isArApAccount,
     allowanceAccountCode,
+    isAdvanceAccount,
+    isAmortizedAccount,
   };
 }
 
@@ -74,8 +80,8 @@ export const standardAccountTemplates = [
   t('1170', '生物資產－流動', '資產', null, true),
   t('1171', '各項生物資產－流動', '資產', '1170'),
   t('1180', '預付款項', '資產', null, true),
-  t('1181', '預付貨款', '資產', '1180'),
-  t('1182', '預付費用', '資產', '1180'),
+  t('1181', '預付貨款', '資產', '1180', false, false, null, false, null, false, false, null, true, false),
+  t('1182', '預付費用', '資產', '1180', false, false, null, false, null, false, false, null, false, true),
   t('1183', '用品盤存', '資產', '1180'),
   t('1184', '進項稅額', '資產', '1180'),
   t('1185', '留抵稅額', '資產', '1180'),
@@ -117,8 +123,8 @@ export const standardAccountTemplates = [
   t('2111', '銀行透支', '負債', '2110'),
   t('2112', '銀行借款', '負債', '2110'),
   t('2120', '合約負債－流動', '負債', null, true),
-  t('2121', '預收貨款', '負債', '2120'),
-  t('2122', '預收收入', '負債', '2120'),
+  t('2121', '預收貨款', '負債', '2120', false, false, null, false, null, false, false, null, true, false),
+  t('2122', '預收收入', '負債', '2120', false, false, null, false, null, false, false, null, false, true),
   t('2130', '應付票據', '負債', null, true),
   t('2131', '應付票據', '負債', '2130', false, false, null, false, null, true),
   t('2140', '應付帳款', '負債', null, true),

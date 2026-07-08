@@ -1,6 +1,9 @@
 import { useApp } from '../context/AppContext';
 import { ACCOUNT_TYPES, DEPRECIATION_METHODS, NORMAL_BALANCE_SIDES, defaultNormalBalance } from '../data/defaultAccounts';
 import {
+  amortizationAmortizedAmount,
+  amortizationMonthlyAmount,
+  amortizationRemaining,
   buildDisplayTree,
   computeAnnualDepreciation,
   computeDisplayTreeOpeningTotals,
@@ -407,6 +410,192 @@ function ArApOpeningEditor({ account }) {
 // ============================================================
 
 // ============================================================
+// 【新增】預付貨款／預收貨款明細卡期初明細編輯
+// 邏輯比照【修改七】應收/應付帳款明細卡，但不需要攤銷（等貨到齊後一次沖銷），只需要對象與金額
+// ============================================================
+function AdvanceOpeningEditor({ account }) {
+  const { advanceCards, addAdvanceCard, updateAdvanceCard, deleteAdvanceCard } = useApp();
+  const cards = advanceCards.filter((c) => c.accountId === account.id);
+  const isPayable = !isDebitNormal(account);
+  const total = cards.reduce((s, c) => s + Number(c.amount || 0), 0);
+
+  return (
+    <div className="inventory-editor">
+      <h4>
+        {account.code} {account.name} － 對象明細卡
+      </h4>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>對象</th>
+            <th>金額</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cards.map((card) => (
+            <tr key={card.id}>
+              <td>
+                <input
+                  value={card.party}
+                  placeholder={isPayable ? '客戶名稱' : '廠商名稱'}
+                  onChange={(e) => updateAdvanceCard(card.id, { party: e.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  type="number"
+                  className="num-input"
+                  value={card.amount ?? ''}
+                  onChange={(e) =>
+                    updateAdvanceCard(card.id, { amount: e.target.value === '' ? '' : Number(e.target.value) })
+                  }
+                />
+              </td>
+              <td>
+                <button type="button" onClick={() => deleteAdvanceCard(card.id)}>
+                  刪除
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th>合計（＝該科目開帳{isPayable ? '貸方' : '借方'}金額）</th>
+            <th className="num-cell">{formatNumber(total)}</th>
+            <th></th>
+          </tr>
+        </tfoot>
+      </table>
+      <button type="button" onClick={() => addAdvanceCard(account.id)}>
+        + 新增{isPayable ? '客戶' : '廠商'}
+      </button>
+    </div>
+  );
+}
+// ============================================================
+// 【新增結束】
+// ============================================================
+
+// ============================================================
+// 【新增】預付費用／預收收入攤銷明細卡期初明細編輯
+// 每月攤銷（認列）金額＝未稅金額÷攤銷期間；已攤銷金額可手動輸入覆蓋，留空則依生效日期自動試算；
+// 剩餘（未攤銷／未認列）餘額＝該科目的開帳金額。預收收入（貸方科目）另外顯示稅額欄位供拆分含稅/未稅金額
+// ============================================================
+function AmortizationOpeningEditor({ account }) {
+  const { amortizationCards, addAmortizationCard, updateAmortizationCard, deleteAmortizationCard } = useApp();
+  const cards = amortizationCards.filter((c) => c.accountId === account.id);
+  const isRevenueSide = !isDebitNormal(account);
+  const total = cards.reduce((s, c) => s + amortizationRemaining(c), 0);
+
+  function numField(card, field) {
+    return (
+      <input
+        type="number"
+        className="num-input"
+        value={card[field] ?? ''}
+        onChange={(e) =>
+          updateAmortizationCard(card.id, { [field]: e.target.value === '' ? '' : Number(e.target.value) })
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="inventory-editor">
+      <h4>
+        {account.code} {account.name} － 攤銷明細卡
+      </h4>
+      <div className="table-scroll">
+        <table className="data-table note-card-table">
+          <thead>
+            <tr>
+              <th>項目名稱</th>
+              <th>對象{isRevenueSide ? '' : '（選填）'}</th>
+              <th>{isRevenueSide ? '未稅金額' : '總金額'}</th>
+              {isRevenueSide && <th>稅額</th>}
+              <th>生效日期</th>
+              <th>攤銷期間（月）</th>
+              <th>{isRevenueSide ? '每月應認列金額' : '每月攤銷金額'}</th>
+              <th>{isRevenueSide ? '已認列金額' : '已攤銷金額'}</th>
+              <th>{isRevenueSide ? '剩餘（未認列）餘額' : '剩餘餘額'}</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cards.map((card) => (
+              <tr key={card.id}>
+                <td>
+                  <input
+                    value={card.name}
+                    placeholder="項目名稱"
+                    onChange={(e) => updateAmortizationCard(card.id, { name: e.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    value={card.party}
+                    placeholder={isRevenueSide ? '客戶名稱' : '對象（選填）'}
+                    onChange={(e) => updateAmortizationCard(card.id, { party: e.target.value })}
+                  />
+                </td>
+                <td>{numField(card, 'untaxedAmount')}</td>
+                {isRevenueSide && <td>{numField(card, 'taxAmount')}</td>}
+                <td>
+                  <input
+                    type="date"
+                    value={card.startDate}
+                    onChange={(e) => updateAmortizationCard(card.id, { startDate: e.target.value })}
+                  />
+                </td>
+                <td>{numField(card, 'months')}</td>
+                <td className="num-cell">{formatNumber(amortizationMonthlyAmount(card))}</td>
+                <td>
+                  <input
+                    type="number"
+                    className="num-input"
+                    placeholder={`依日期試算：${formatNumber(amortizationAmortizedAmount(card))}`}
+                    value={card.amortizedOverride ?? ''}
+                    onChange={(e) =>
+                      updateAmortizationCard(card.id, {
+                        amortizedOverride: e.target.value === '' ? null : Number(e.target.value),
+                      })
+                    }
+                  />
+                </td>
+                <td className="num-cell">{formatNumber(amortizationRemaining(card))}</td>
+                <td>
+                  <button type="button" onClick={() => deleteAmortizationCard(card.id)}>
+                    刪除
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colSpan={isRevenueSide ? 8 : 7}>
+                合計（＝該科目開帳{isRevenueSide ? '貸方' : '借方'}金額）
+              </th>
+              <th className="num-cell">{formatNumber(total)}</th>
+              <th></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="hint-text">已攤銷／已認列金額留空時，會依生效日期與今日之間經過的月數自動試算；如需以特定基準日覆蓋，請直接輸入金額。</p>
+      <button type="button" onClick={() => addAmortizationCard(account.id)}>
+        + 新增項目
+      </button>
+    </div>
+  );
+}
+// ============================================================
+// 【新增結束】
+// ============================================================
+
+// ============================================================
 // 【修改一】借貸分欄開帳金額輸入格
 // mismatch：金額填在與科目正常餘額方向不符的欄位時給予警告，但仍允許填入
 // （例如透支的銀行帳戶，現金類科目卻出現貸方餘額）
@@ -515,6 +704,8 @@ export default function OpeningBalanceTab() {
   const fixedAssetAccounts = sorted.filter((a) => a.isFixedAsset && !a.isSummary);
   const noteAccounts = sorted.filter((a) => a.isNoteAccount && !a.isSummary);
   const arApAccounts = sorted.filter((a) => a.isArApAccount && !a.isSummary);
+  const advanceAccounts = sorted.filter((a) => a.isAdvanceAccount && !a.isSummary);
+  const amortizationAccounts = sorted.filter((a) => a.isAmortizedAccount && !a.isSummary);
   // 【修改六】顯示分類群組（大分類/次分類）＋真實科目的四層摺疊樹；彙總科目與顯示分類群組的開帳借貸金額
   // 皆＝其下所有明細科目加總（即時運算），不可手動輸入；顯示分類群組的加總純供 UI 參考，不影響任何驗算邏輯
   const displayTree = buildDisplayTree(accounts);
@@ -639,6 +830,8 @@ export default function OpeningBalanceTab() {
                 acc.isNoteAccount && '見下方票據明細卡',
                 acc.isArApAccount && '見下方客戶/廠商明細卡',
                 isArApAllowancePairAccount(accounts, acc) && '備抵損失/呆帳科目，請直接輸入既有金額',
+                acc.isAdvanceAccount && '見下方對象明細卡',
+                acc.isAmortizedAccount && '見下方攤銷明細卡',
               ]
                 .filter(Boolean)
                 .join('；');
@@ -731,6 +924,24 @@ export default function OpeningBalanceTab() {
           <h3>應收/應付帳款客戶廠商明細卡</h3>
           {arApAccounts.map((acc) => (
             <ArApOpeningEditor key={acc.id} account={acc} />
+          ))}
+        </div>
+      )}
+
+      {advanceAccounts.length > 0 && (
+        <div className="inventory-editors">
+          <h3>預付貨款/預收貨款對象明細卡</h3>
+          {advanceAccounts.map((acc) => (
+            <AdvanceOpeningEditor key={acc.id} account={acc} />
+          ))}
+        </div>
+      )}
+
+      {amortizationAccounts.length > 0 && (
+        <div className="inventory-editors">
+          <h3>預付費用/預收收入攤銷明細卡</h3>
+          {amortizationAccounts.map((acc) => (
+            <AmortizationOpeningEditor key={acc.id} account={acc} />
           ))}
         </div>
       )}

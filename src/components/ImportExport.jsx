@@ -9,6 +9,8 @@ export default function ImportExport() {
     fixedAssetCards,
     noteCards,
     arApCards,
+    advanceCards,
+    amortizationCards,
     entries,
     openingSnapshot,
     importData,
@@ -23,6 +25,8 @@ export default function ImportExport() {
       fixedAssetCards,
       noteCards,
       arApCards,
+      advanceCards,
+      amortizationCards,
       openingSnapshot,
       entries,
     };

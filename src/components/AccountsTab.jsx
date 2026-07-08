@@ -16,6 +16,8 @@ const emptyForm = {
   isNoteAccount: false,
   isArApAccount: false,
   allowanceAccountCode: '',
+  isAdvanceAccount: false,
+  isAmortizedAccount: false,
   normalBalance: defaultNormalBalance('資產'),
 };
 
@@ -77,6 +79,8 @@ export default function AccountsTab() {
       isNoteAccount: form.isSummary ? false : form.isNoteAccount,
       isArApAccount: form.isSummary ? false : form.isArApAccount,
       allowanceAccountCode: form.isArApAccount ? form.allowanceAccountCode.trim() || null : null,
+      isAdvanceAccount: form.isSummary ? false : form.isAdvanceAccount,
+      isAmortizedAccount: form.isSummary ? false : form.isAmortizedAccount,
       normalBalance: form.normalBalance,
     };
     if (editingId) {
@@ -101,6 +105,8 @@ export default function AccountsTab() {
       isNoteAccount: !!acc.isNoteAccount,
       isArApAccount: !!acc.isArApAccount,
       allowanceAccountCode: acc.allowanceAccountCode || '',
+      isAdvanceAccount: !!acc.isAdvanceAccount,
+      isAmortizedAccount: !!acc.isAmortizedAccount,
       normalBalance: acc.normalBalance || defaultNormalBalance(acc.type),
     });
     setError('');
@@ -184,6 +190,8 @@ export default function AccountsTab() {
                   {acc.isNoteAccount ? '／票據' : ''}
                   {acc.isArApAccount ? `／應收應付帳款${acc.allowanceAccountCode ? `（備抵科目：${acc.allowanceAccountCode}）` : ''}` : ''}
                   {isArApAllowancePairAccount(accounts, acc) ? '／備抵損失呆帳科目' : ''}
+                  {acc.isAdvanceAccount ? '／預付貨款或預收貨款（對象明細卡）' : ''}
+                  {acc.isAmortizedAccount ? '／預付費用或預收收入（攤銷明細卡）' : ''}
                 </td>
                 <td className="col-action" data-label="操作">
                   <div className="action-buttons">
@@ -293,6 +301,24 @@ export default function AccountsTab() {
                 onChange={(e) => setForm({ ...form, allowanceAccountCode: e.target.value })}
               />
             )}
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.isAdvanceAccount}
+                disabled={form.isSummary}
+                onChange={(e) => setForm({ ...form, isAdvanceAccount: e.target.checked })}
+              />
+              預付貨款/預收貨款科目（啟用對象明細卡，不需攤銷）
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.isAmortizedAccount}
+                disabled={form.isSummary}
+                onChange={(e) => setForm({ ...form, isAmortizedAccount: e.target.checked })}
+              />
+              預付費用/預收收入科目（啟用攤銷明細卡）
+            </label>
             <button type="submit">{editingId ? '更新科目' : '新增科目'}</button>
             {editingId && (
               <button type="button" onClick={resetForm}>

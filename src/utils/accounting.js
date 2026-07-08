@@ -341,7 +341,15 @@ export function isDepreciationPairAccount(accounts, account) {
 export function isDerivedOpeningAccount(accounts, accountId) {
   const acc = accounts.find((a) => a.id === accountId);
   if (!acc) return false;
-  if (acc.isInventory || acc.isFixedAsset || acc.isNoteAccount || acc.isArApAccount) return true;
+  if (
+    acc.isInventory ||
+    acc.isFixedAsset ||
+    acc.isNoteAccount ||
+    acc.isArApAccount ||
+    acc.isAdvanceAccount ||
+    acc.isAmortizedAccount
+  )
+    return true;
   return isDepreciationPairAccount(accounts, acc);
 }
 
@@ -472,4 +480,74 @@ export function isArApAllowancePairAccount(accounts, account) {
 }
 // ============================================================
 // 【修改七結束】
+// ============================================================
+
+// ============================================================
+// 【新增】預付貨款／預收貨款明細卡（對象／金額）
+// 邏輯比照【修改七】應收/應付帳款明細卡，但這是等貨物到齊後一次沖銷，不是按時間分期認列，
+// 故不需要攤銷欄位，也不追蹤沖銷狀態，單純以卡片金額加總作為該科目的開帳金額
+// ============================================================
+export function computeAdvanceOpeningTotals(advanceCards) {
+  const totals = {};
+  advanceCards.forEach((card) => {
+    totals[card.accountId] = (totals[card.accountId] || 0) + Number(card.amount || 0);
+  });
+  return totals;
+}
+// ============================================================
+// 【新增結束】
+// ============================================================
+
+// ============================================================
+// 【新增】預付費用／預收收入攤銷明細卡
+// 欄位：項目名稱／對象／未稅金額／稅額（預收收入適用）／生效日期／攤銷期間（月）
+// 依「未稅金額 ÷ 攤銷期間」算出每月攤銷（認列）金額；已攤銷金額可手動輸入，留空則依生效日期與今日
+// 之間經過的月數自動試算；剩餘（未攤銷／未認列）餘額＝未稅金額－已攤銷金額，即為該科目的開帳金額
+// ============================================================
+export function amortizationMonthlyAmount(card) {
+  const months = Number(card.months || 0);
+  if (!months) return 0;
+  return Number(card.untaxedAmount || 0) / months;
+}
+
+// 依生效日期與攤銷期間，計算「至今日」已經過的攤銷月數（無條件捨去，限制於 0～攤銷期間之間）
+export function amortizationElapsedMonths(card, asOfDate = new Date()) {
+  const months = Number(card.months || 0);
+  if (!months || !card.startDate) return 0;
+  const start = new Date(card.startDate);
+  if (Number.isNaN(start.getTime())) return 0;
+  let elapsed = (asOfDate.getFullYear() - start.getFullYear()) * 12 + (asOfDate.getMonth() - start.getMonth());
+  if (asOfDate.getDate() < start.getDate()) elapsed -= 1;
+  return Math.min(Math.max(elapsed, 0), months);
+}
+
+// 依日期試算的已攤銷（已認列）金額
+export function amortizationComputedAmount(card) {
+  return amortizationMonthlyAmount(card) * amortizationElapsedMonths(card);
+}
+
+// 已攤銷（已認列）金額：使用者手動輸入者優先，留空則依日期自動試算
+export function amortizationAmortizedAmount(card) {
+  if (card.amortizedOverride !== null && card.amortizedOverride !== '' && card.amortizedOverride !== undefined) {
+    return Number(card.amortizedOverride);
+  }
+  return amortizationComputedAmount(card);
+}
+
+// 剩餘（未攤銷／未認列）餘額
+export function amortizationRemaining(card) {
+  const base = Number(card.untaxedAmount || 0);
+  return Math.max(base - amortizationAmortizedAmount(card), 0);
+}
+
+// 依科目彙總所有攤銷卡的剩餘餘額，作為該預付費用／預收收入科目的期初餘額
+export function computeAmortizationOpeningTotals(amortizationCards) {
+  const totals = {};
+  amortizationCards.forEach((card) => {
+    totals[card.accountId] = (totals[card.accountId] || 0) + amortizationRemaining(card);
+  });
+  return totals;
+}
+// ============================================================
+// 【新增結束】
 // ============================================================

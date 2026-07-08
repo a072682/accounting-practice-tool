@@ -1,6 +1,8 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 import { createAccountsFromTemplates, defaultAccounts, standardAccountTemplates } from '../data/defaultAccounts';
 import {
+  computeAdvanceOpeningTotals,
+  computeAmortizationOpeningTotals,
   computeArApOpeningTotals,
   computeFixedAssetOpeningTotals,
   computeInventoryOpeningTotals,
@@ -34,6 +36,18 @@ function nextArApCardId() {
   return `arap${Date.now()}_${arApIdCounter}`;
 }
 
+let advanceIdCounter = 0;
+function nextAdvanceCardId() {
+  advanceIdCounter += 1;
+  return `adv${Date.now()}_${advanceIdCounter}`;
+}
+
+let amortizationIdCounter = 0;
+function nextAmortizationCardId() {
+  amortizationIdCounter += 1;
+  return `amort${Date.now()}_${amortizationIdCounter}`;
+}
+
 export function AppProvider({ children }) {
   const [accounts, setAccounts] = useState(defaultAccounts);
   const [manualOpeningBalances, setManualOpeningBalances] = useState({});
@@ -41,6 +55,8 @@ export function AppProvider({ children }) {
   const [fixedAssetCards, setFixedAssetCards] = useState([]);
   const [noteCards, setNoteCards] = useState([]);
   const [arApCards, setArApCards] = useState([]);
+  const [advanceCards, setAdvanceCards] = useState([]);
+  const [amortizationCards, setAmortizationCards] = useState([]);
   const [entries, setEntries] = useState([]);
   // 【修改八】期初資產負債表快照：一旦「完成開帳」就凍結，之後不論科目/開帳金額/分錄如何變動都不受影響
   const [openingSnapshot, setOpeningSnapshot] = useState(null);
@@ -56,6 +72,8 @@ export function AppProvider({ children }) {
     const { costTotals, accumDepTotals } = computeFixedAssetOpeningTotals(accounts, fixedAssetCards);
     const noteTotals = computeNoteOpeningTotals(noteCards);
     const arApTotals = computeArApOpeningTotals(arApCards);
+    const advanceTotals = computeAdvanceOpeningTotals(advanceCards);
+    const amortizationTotals = computeAmortizationOpeningTotals(amortizationCards);
     const merged = { ...manualOpeningBalances };
     accounts.forEach((a) => {
       if (a.isInventory) merged[a.id] = { debit: inventoryTotals[a.id] || 0, credit: 0 };
@@ -68,6 +86,14 @@ export function AppProvider({ children }) {
         const total = arApTotals[a.id] || 0;
         merged[a.id] = isDebitNormal(a) ? { debit: total, credit: 0 } : { debit: 0, credit: total };
       }
+      if (a.isAdvanceAccount) {
+        const total = advanceTotals[a.id] || 0;
+        merged[a.id] = isDebitNormal(a) ? { debit: total, credit: 0 } : { debit: 0, credit: total };
+      }
+      if (a.isAmortizedAccount) {
+        const total = amortizationTotals[a.id] || 0;
+        merged[a.id] = isDebitNormal(a) ? { debit: total, credit: 0 } : { debit: 0, credit: total };
+      }
     });
     accounts.forEach((a) => {
       if (accumDepTotals[a.id] !== undefined) {
@@ -75,7 +101,16 @@ export function AppProvider({ children }) {
       }
     });
     return merged;
-  }, [manualOpeningBalances, inventoryItems, fixedAssetCards, noteCards, arApCards, accounts]);
+  }, [
+    manualOpeningBalances,
+    inventoryItems,
+    fixedAssetCards,
+    noteCards,
+    arApCards,
+    advanceCards,
+    amortizationCards,
+    accounts,
+  ]);
 
   function addAccount(account) {
     setAccounts((prev) => [...prev, { ...account, id: `a${Date.now()}` }]);
@@ -96,6 +131,8 @@ export function AppProvider({ children }) {
     setFixedAssetCards((prev) => prev.filter((c) => c.accountId !== id));
     setNoteCards((prev) => prev.filter((c) => c.accountId !== id));
     setArApCards((prev) => prev.filter((c) => c.accountId !== id));
+    setAdvanceCards((prev) => prev.filter((c) => c.accountId !== id));
+    setAmortizationCards((prev) => prev.filter((c) => c.accountId !== id));
   }
 
   // 【修改一】開帳借貸分欄：side 為 'debit' 或 'credit'，分別寫入該科目開帳金額的借方/貸方欄位
@@ -108,7 +145,9 @@ export function AppProvider({ children }) {
       account?.isInventory ||
       account?.isFixedAsset ||
       account?.isNoteAccount ||
-      account?.isArApAccount
+      account?.isArApAccount ||
+      account?.isAdvanceAccount ||
+      account?.isAmortizedAccount
     )
       return;
     if (accounts.some((a) => a.isFixedAsset && a.depreciationAccountCode === account?.code)) return;
@@ -218,6 +257,53 @@ export function AppProvider({ children }) {
     setArApCards((prev) => prev.filter((c) => c.id !== id));
   }
 
+  // 【新增】預付貨款／預收貨款明細卡（對象／金額，無攤銷，等貨到齊後一次沖銷）
+  function addAdvanceCard(accountId, card = {}) {
+    const newCard = {
+      id: nextAdvanceCardId(),
+      accountId,
+      party: '',
+      amount: 0,
+      ...card,
+    };
+    setAdvanceCards((prev) => [...prev, newCard]);
+    return newCard.id;
+  }
+
+  function updateAdvanceCard(id, patch) {
+    setAdvanceCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }
+
+  function deleteAdvanceCard(id) {
+    setAdvanceCards((prev) => prev.filter((c) => c.id !== id));
+  }
+
+  // 【新增】預付費用／預收收入攤銷明細卡（項目名稱／對象／未稅金額／稅額／生效日期／攤銷期間）
+  function addAmortizationCard(accountId, card = {}) {
+    const newCard = {
+      id: nextAmortizationCardId(),
+      accountId,
+      name: '',
+      party: '',
+      untaxedAmount: 0,
+      taxAmount: 0,
+      startDate: '',
+      months: 0,
+      amortizedOverride: null,
+      ...card,
+    };
+    setAmortizationCards((prev) => [...prev, newCard]);
+    return newCard.id;
+  }
+
+  function updateAmortizationCard(id, patch) {
+    setAmortizationCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }
+
+  function deleteAmortizationCard(id) {
+    setAmortizationCards((prev) => prev.filter((c) => c.id !== id));
+  }
+
   function addEntry(entry) {
     setEntries((prev) => [...prev, { ...entry, id: `e${Date.now()}` }]);
   }
@@ -244,6 +330,8 @@ export function AppProvider({ children }) {
     if (data.fixedAssetCards) setFixedAssetCards(data.fixedAssetCards);
     if (data.noteCards) setNoteCards(data.noteCards);
     if (data.arApCards) setArApCards(data.arApCards);
+    if (data.advanceCards) setAdvanceCards(data.advanceCards);
+    if (data.amortizationCards) setAmortizationCards(data.amortizationCards);
     if ('openingSnapshot' in data) setOpeningSnapshot(data.openingSnapshot);
     if (data.entries) setEntries(data.entries);
   }
@@ -269,6 +357,8 @@ export function AppProvider({ children }) {
     fixedAssetCards,
     noteCards,
     arApCards,
+    advanceCards,
+    amortizationCards,
     entries,
     openingSnapshot,
     addAccount,
@@ -287,6 +377,12 @@ export function AppProvider({ children }) {
     addArApCard,
     updateArApCard,
     deleteArApCard,
+    addAdvanceCard,
+    updateAdvanceCard,
+    deleteAdvanceCard,
+    addAmortizationCard,
+    updateAmortizationCard,
+    deleteAmortizationCard,
     addEntry,
     deleteEntry,
     finalizeOpening,
