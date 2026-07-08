@@ -1,14 +1,14 @@
-import { useApp } from '../context/AppContext';
-import { computeInventoryState, formatNumber, inventoryAvgCost, sortAccountsByCode } from '../utils/accounting';
+import { useApp } from '../../context/AppContext';
+import { computeInventoryState, formatNumber, inventoryAvgCost, sortAccountsByCode } from '../../utils/accounting';
 
-export default function InventoryDetailTab() {
+export default function InventoryDetailPanel() {
   const { accounts, inventoryItems, entries } = useApp();
   const inventoryAccounts = sortAccountsByCode(accounts.filter((a) => a.isInventory && !a.isSummary));
   const state = computeInventoryState(inventoryItems, entries);
 
   return (
     <div>
-      <h2>存貨明細表</h2>
+      <h2>存貨明細</h2>
       {inventoryAccounts.length === 0 && <p className="hint-text">目前尚未設定存貨科目。</p>}
 
       {inventoryAccounts.map((acc) => {

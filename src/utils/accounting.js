@@ -86,6 +86,18 @@ export function entryCreditTotal(entry) {
   return entry.credits.reduce((s, c) => s + Number(c.amount || 0), 0);
 }
 
+// 當「上層科目代號」留空時，依代號前綴自動找出現有科目中最長匹配的作為上層科目
+export function inferParentCode(accounts, code, excludeId) {
+  let best = null;
+  accounts.forEach((a) => {
+    if (a.id === excludeId || a.code === code) return;
+    if (code.startsWith(a.code) && (!best || a.code.length > best.length)) {
+      best = a.code;
+    }
+  });
+  return best;
+}
+
 export function sortAccountsByCode(accounts) {
   return [...accounts].sort((a, b) => a.code.localeCompare(b.code, 'zh-Hant'));
 }
@@ -96,6 +108,168 @@ export function accountMidCategory(accounts, account) {
   const parent = accounts.find((a) => a.code === account.parent);
   return parent ? parent.name : '—';
 }
+
+// ============================================================
+// 【修改五】科目樹狀結構：支援彙總科目無限層級疊加（彙總底下可再接子彙總或明細）
+// ============================================================
+
+// 依 parent 代號建立科目樹（陣列形式的多層節點：{ account, children: [...] }）
+// 找不到對應上層代號的科目視為頂層節點，避免因資料不一致（parent 指向不存在的代號）而遺漏
+export function buildAccountTree(accounts) {
+  const byCode = new Map(accounts.map((a) => [a.code, a]));
+  const childrenByParentCode = new Map();
+  const roots = [];
+  accounts.forEach((a) => {
+    if (a.parent && byCode.has(a.parent)) {
+      if (!childrenByParentCode.has(a.parent)) childrenByParentCode.set(a.parent, []);
+      childrenByParentCode.get(a.parent).push(a);
+    } else {
+      roots.push(a);
+    }
+  });
+  function build(acc) {
+    const children = sortAccountsByCode(childrenByParentCode.get(acc.code) || []);
+    return { account: acc, children: children.map(build) };
+  }
+  return sortAccountsByCode(roots).map(build);
+}
+
+// ============================================================
+// 【修改五結束】
+// ============================================================
+
+// ============================================================
+// 【修改六】顯示分類群組（Level 0 大分類／Level 1 次分類）
+// 純粹用於 UI 摺疊顯示：不是真實科目、沒有代號、不參與任何驗算或分錄邏輯。
+// 只依「科目代號前幾碼」自動比對分組，新增/調整科目時完全不需要手動指定顯示分類。
+// 呈現時共四層：Level 0 顯示分類 → Level 1 顯示分類（可省略）→ Level 2 彙總科目（可省略）→ Level 3 明細科目
+// 若要調整分類規則或新增/刪減分類，只需修改這份設定陣列即可，不需更動樹狀建構或渲染邏輯。
+// ============================================================
+export const defaultDisplayGroupDefs = [
+  { level: 0, key: 'assets', label: '1xxx 資產', match: (code) => code.startsWith('1') },
+  { level: 0, key: 'liabilities', label: '2xxx 負債', match: (code) => code.startsWith('2') },
+  { level: 0, key: 'equity', label: '3xxx 權益', match: (code) => code.startsWith('3') },
+  { level: 0, key: 'revenue', label: '4xxx 收益', match: (code) => code.startsWith('4') },
+  { level: 0, key: 'expense', label: '5xxx 費損', match: (code) => code.startsWith('5') },
+
+  { level: 1, key: 'current-assets', label: '流動資產', parent: 'assets', match: (code) => code.startsWith('11') },
+  { level: 1, key: 'noncurrent-assets', label: '非流動資產', parent: 'assets', match: (code) => code.startsWith('12') },
+  { level: 1, key: 'current-liabilities', label: '流動負債', parent: 'liabilities', match: (code) => code.startsWith('21') },
+  {
+    level: 1,
+    key: 'noncurrent-liabilities',
+    label: '非流動負債',
+    parent: 'liabilities',
+    match: (code) => code.startsWith('22'),
+  },
+  { level: 1, key: 'operating-revenue', label: '營業收入', parent: 'revenue', match: (code) => code.startsWith('41') },
+  {
+    level: 1,
+    key: 'nonoperating-revenue',
+    label: '營業外收入',
+    parent: 'revenue',
+    match: (code) => code.startsWith('42'),
+  },
+  { level: 1, key: 'operating-cost', label: '營業成本', parent: 'expense', match: (code) => code.startsWith('51') },
+  { level: 1, key: 'operating-expense', label: '營業費用', parent: 'expense', match: (code) => code.startsWith('52') },
+  {
+    level: 1,
+    key: 'nonoperating-expense',
+    label: '營業外支出',
+    parent: 'expense',
+    match: (code) => code.startsWith('53'),
+  },
+];
+
+// 節點的「代表代號」：真實科目節點就是自己的代號；顯示分類節點取其底下所有子節點中最小的代號，
+// 用來決定顯示分類群組彼此之間、以及群組與科目之間的顯示順序
+function representativeCode(node) {
+  if (node.kind === 'account') return node.account.code;
+  let min = null;
+  node.children.forEach((child) => {
+    const code = representativeCode(child);
+    if (code && (min === null || code < min)) min = code;
+  });
+  return min;
+}
+
+function sortDisplayChildren(node) {
+  node.children.forEach(sortDisplayChildren);
+  node.children.sort((a, b) => (representativeCode(a) || '').localeCompare(representativeCode(b) || '', 'zh-Hant'));
+}
+
+// 依「顯示分類規則＋真實科目上下層結構」建立四層摺疊樹。
+// 顯示分類節點：{ kind: 'group', key, label, children }
+// 真實科目節點：{ kind: 'account', account, children }（children 可能是子彙總或明細，來自 buildAccountTree）
+// 找不到任何 Level 0 規則匹配的科目（理論上不會發生，除非科目代號不在 1~5 開頭）會被歸入樹的最後，不遺漏任何科目
+export function buildDisplayTree(accounts, groupDefs = defaultDisplayGroupDefs) {
+  const accountTree = buildAccountTree(accounts);
+  const level0Defs = groupDefs.filter((d) => d.level === 0);
+  const level1Defs = groupDefs.filter((d) => d.level === 1);
+
+  function wrapAccountNode(node) {
+    return { kind: 'account', account: node.account, children: node.children.map(wrapAccountNode) };
+  }
+
+  const level0Nodes = level0Defs.map((def) => ({ kind: 'group', key: def.key, label: def.label, children: [] }));
+  const unclassified = [];
+
+  accountTree.forEach((rootNode) => {
+    const code = rootNode.account.code;
+    const l0Def = level0Defs.find((d) => d.match(code));
+    if (!l0Def) {
+      unclassified.push(wrapAccountNode(rootNode));
+      return;
+    }
+    const l0Node = level0Nodes.find((n) => n.key === l0Def.key);
+    const l1Def = level1Defs.find((d) => d.parent === l0Def.key && d.match(code));
+    if (l1Def) {
+      let l1Node = l0Node.children.find((c) => c.kind === 'group' && c.key === l1Def.key);
+      if (!l1Node) {
+        l1Node = { kind: 'group', key: l1Def.key, label: l1Def.label, children: [] };
+        l0Node.children.push(l1Node);
+      }
+      l1Node.children.push(wrapAccountNode(rootNode));
+    } else {
+      l0Node.children.push(wrapAccountNode(rootNode));
+    }
+  });
+
+  const tree = [...level0Nodes.filter((n) => n.children.length > 0), ...unclassified];
+  tree.forEach(sortDisplayChildren);
+  return tree;
+}
+
+// 遞迴計算顯示樹每個節點的開帳借/貸「參考加總」：
+// 明細科目＝自身輸入值；彙總科目／顯示分類群組＝其下所有明細科目金額的加總（逐層往上疊加，不限深度）。
+// 顯示分類群組的加總純供 UI 參考顯示，不是正式科目餘額，不影響任何驗算邏輯。
+// 回傳的 map 以真實科目用 account.id 為 key、顯示分類群組用其 key 為 key。
+export function computeDisplayTreeOpeningTotals(tree, openingBalances) {
+  const result = {};
+  function walk(node) {
+    if (node.kind === 'account' && !node.account.isSummary) {
+      const entry = getOpeningEntry(openingBalances, node.account.id);
+      result[node.account.id] = entry;
+      return entry;
+    }
+    const totals = node.children.reduce(
+      (acc, child) => {
+        const t = walk(child);
+        acc.debit += t.debit;
+        acc.credit += t.credit;
+        return acc;
+      },
+      { debit: 0, credit: 0 }
+    );
+    result[node.kind === 'account' ? node.account.id : node.key] = totals;
+    return totals;
+  }
+  tree.forEach(walk);
+  return result;
+}
+// ============================================================
+// 【修改六結束】
+// ============================================================
 
 // ============================================================
 // 【修改二】存貨明細（品項／單價／數量）
@@ -162,11 +336,12 @@ export function isDepreciationPairAccount(accounts, account) {
   return accounts.some((a) => a.isFixedAsset && a.depreciationAccountCode === account.code);
 }
 
-// 開帳時，存貨／不動產廠房設備／應收應付票據的科目金額皆改由明細（品項／資產卡／票據卡）加總而來，不可手動輸入
+// 開帳時，存貨／不動產廠房設備／應收應付票據／應收應付帳款的科目金額皆改由明細
+// （品項／資產卡／票據卡／客戶廠商卡）加總而來，不可手動輸入
 export function isDerivedOpeningAccount(accounts, accountId) {
   const acc = accounts.find((a) => a.id === accountId);
   if (!acc) return false;
-  if (acc.isInventory || acc.isFixedAsset || acc.isNoteAccount) return true;
+  if (acc.isInventory || acc.isFixedAsset || acc.isNoteAccount || acc.isArApAccount) return true;
   return isDepreciationPairAccount(accounts, acc);
 }
 
@@ -247,4 +422,54 @@ export function computeNoteState(accounts, noteCards, entries) {
 }
 // ============================================================
 // 【修改四結束】
+// ============================================================
+
+// ============================================================
+// 【修改七】應收/應付帳款客戶廠商明細卡（對象／金額），邏輯比照【修改四】票據明細卡，
+// 但不需要票據號碼／開票日／到期日等欄位，只需要對象名稱與金額
+// ============================================================
+
+// 依科目彙總「開帳時建立」的客戶/廠商卡金額，作為該應收/應付帳款科目的期初餘額
+// 分錄登錄時新增的卡（fromOpening 為 false）不計入期初餘額，其金額已經由該筆分錄自身反映在借貸金額中
+export function computeArApOpeningTotals(arApCards) {
+  const totals = {};
+  arApCards.forEach((card) => {
+    if (!card.fromOpening) return;
+    totals[card.accountId] = (totals[card.accountId] || 0) + Number(card.amount || 0);
+  });
+  return totals;
+}
+
+// 某一筆分錄借/貸方分錄行，對應收/應付帳款科目而言是「新增客戶/廠商欠款」還是「收款/付款沖銷既有欠款」
+// 與科目正常餘額方向同側 → 新增（如應收帳款借方增加、應付帳款貸方增加）
+// 異側 → 沖銷（收現／付款，如應收帳款貸方減少、應付帳款借方減少）
+export function isArApIncreaseLine(account, side) {
+  return (side === 'debit') === isDebitNormal(account);
+}
+
+// 依「期初客戶/廠商卡金額 + 分錄中新增/沖銷的異動」重播，算出每張卡目前的未沖銷餘額
+export function computeArApState(accounts, arApCards, entries) {
+  const state = {};
+  arApCards.forEach((card) => {
+    state[card.id] = { remaining: card.fromOpening ? Number(card.amount || 0) : 0 };
+  });
+  function applyLine(line, side) {
+    if (!line.arApId || !state[line.arApId]) return;
+    const account = accounts.find((a) => a.id === line.accountId);
+    const delta = isArApIncreaseLine(account, side) ? Number(line.amount || 0) : -Number(line.amount || 0);
+    state[line.arApId].remaining += delta;
+  }
+  entries.forEach((entry) => {
+    entry.debits.forEach((d) => applyLine(d, 'debit'));
+    entry.credits.forEach((c) => applyLine(c, 'credit'));
+  });
+  return state;
+}
+
+// 該科目是否為某應收/應付帳款科目配對的備抵損失／呆帳（抵銷）科目
+export function isArApAllowancePairAccount(accounts, account) {
+  return accounts.some((a) => a.isArApAccount && a.allowanceAccountCode === account.code);
+}
+// ============================================================
+// 【修改七結束】
 // ============================================================

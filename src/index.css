@@ -1,6 +1,58 @@
 :root {
   font-family: system-ui, 'Microsoft JhengHei', -apple-system, sans-serif;
   color-scheme: light;
+
+  /* 淺色主題（預設） */
+  --bg-page: #f4f5f7;
+  --bg-surface: #ffffff;
+  --bg-surface-alt: #f7f8fb;
+  --bg-hover: #eef0f4;
+  --bg-readonly: #f0f1f4;
+  --text-primary: #1f2430;
+  --text-secondary: #4a4f5a;
+  --text-muted: #6b7280;
+  --text-readonly: #8a8f98;
+  --text-on-accent: #ffffff;
+  --border-soft: #e2e5eb;
+  --border-strong: #d7dbe2;
+  --input-border: #c9ced7;
+  --accent: #2f6fed;
+  --accent-disabled: #a9bde0;
+  --danger: #d33232;
+  --warning-border: #d9822b;
+  --warning-bg: #fff8ef;
+  --warning-text: #b5650a;
+  --success: #1c8a4a;
+  --shadow-color: rgba(0, 0, 0, 0.08);
+  --shadow-color-strong: rgba(0, 0, 0, 0.1);
+}
+
+/* 夜晚模式：深藍而非純黑，長時間閱讀較不刺眼 */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-page: #0f1626;
+  --bg-surface: #16203a;
+  --bg-surface-alt: #1c2740;
+  --bg-hover: #223050;
+  --bg-readonly: #1a2440;
+  --text-primary: #e4e8f1;
+  --text-secondary: #aab4c8;
+  --text-muted: #8b96ac;
+  --text-readonly: #8b96ac;
+  --text-on-accent: #ffffff;
+  --border-soft: #2a3654;
+  --border-strong: #34426a;
+  --input-border: #3a4870;
+  --accent: #5b8def;
+  --accent-disabled: #3b4c72;
+  --danger: #ff6b6b;
+  --warning-border: #e0a352;
+  --warning-bg: #3a2e1a;
+  --warning-text: #ffbb66;
+  --success: #4ade80;
+  --shadow-color: rgba(0, 0, 0, 0.4);
+  --shadow-color-strong: rgba(0, 0, 0, 0.5);
 }
 
 * {
@@ -9,6 +61,7 @@
 
 body {
   margin: 0;
-  background: #f4f5f7;
-  color: #1f2430;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }

@@ -1,15 +1,21 @@
-import { useApp } from '../context/AppContext';
-import { computeNoteState, formatNumber, sortAccountsByCode } from '../utils/accounting';
+import { useApp } from '../../context/AppContext';
+import { computeNoteState, formatNumber, isDebitNormal, sortAccountsByCode } from '../../utils/accounting';
 
-export default function NoteDetailTab() {
+// side: 'receivable'（應收票據，正常餘額為借方）或 'payable'（應付票據，正常餘額為貸方）
+export default function NoteDetailPanel({ side }) {
   const { accounts, noteCards, entries } = useApp();
-  const noteAccounts = sortAccountsByCode(accounts.filter((a) => a.isNoteAccount && !a.isSummary));
+  const wantDebitNormal = side === 'receivable';
+  const noteAccounts = sortAccountsByCode(
+    accounts.filter((a) => a.isNoteAccount && !a.isSummary && isDebitNormal(a) === wantDebitNormal)
+  );
   const state = computeNoteState(accounts, noteCards, entries);
+  const title = side === 'receivable' ? '應收票據明細' : '應付票據明細';
+  const emptyHint = side === 'receivable' ? '目前尚未設定應收票據科目。' : '目前尚未設定應付票據科目。';
 
   return (
     <div>
-      <h2>票據明細表</h2>
-      {noteAccounts.length === 0 && <p className="hint-text">目前尚未設定票據科目。</p>}
+      <h2>{title}</h2>
+      {noteAccounts.length === 0 && <p className="hint-text">{emptyHint}</p>}
 
       {noteAccounts.map((acc) => {
         const cards = noteCards.filter((c) => c.accountId === acc.id);

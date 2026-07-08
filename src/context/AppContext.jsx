@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 import { createAccountsFromTemplates, defaultAccounts, standardAccountTemplates } from '../data/defaultAccounts';
 import {
+  computeArApOpeningTotals,
   computeFixedAssetOpeningTotals,
   computeInventoryOpeningTotals,
   computeNoteOpeningTotals,
@@ -27,29 +28,44 @@ function nextNoteCardId() {
   return `note${Date.now()}_${noteIdCounter}`;
 }
 
+let arApIdCounter = 0;
+function nextArApCardId() {
+  arApIdCounter += 1;
+  return `arap${Date.now()}_${arApIdCounter}`;
+}
+
 export function AppProvider({ children }) {
   const [accounts, setAccounts] = useState(defaultAccounts);
   const [manualOpeningBalances, setManualOpeningBalances] = useState({});
   const [inventoryItems, setInventoryItems] = useState([]);
   const [fixedAssetCards, setFixedAssetCards] = useState([]);
   const [noteCards, setNoteCards] = useState([]);
+  const [arApCards, setArApCards] = useState([]);
   const [entries, setEntries] = useState([]);
+  // 【修改八】期初資產負債表快照：一旦「完成開帳」就凍結，之後不論科目/開帳金額/分錄如何變動都不受影響
+  const [openingSnapshot, setOpeningSnapshot] = useState(null);
 
   // openingBalances 結構：{ [accountId]: { debit: number, credit: number } }
   // 存貨科目的開帳借方金額改由品項明細加總而來（見【修改二】），
   // 不動產廠房設備的成本科目開帳借方金額、配對累計折舊科目開帳貸方金額改由資產卡加總而來（見【修改三】），
-  // 應收/應付票據科目的開帳金額改由票據卡加總而來（見【修改四】）
+  // 應收/應付票據科目的開帳金額改由票據卡加總而來（見【修改四】），
+  // 應收/應付帳款科目的開帳金額改由客戶/廠商卡加總而來（見【修改七】）
   // 皆會覆蓋掉手動輸入的值
   const openingBalances = useMemo(() => {
     const inventoryTotals = computeInventoryOpeningTotals(inventoryItems);
     const { costTotals, accumDepTotals } = computeFixedAssetOpeningTotals(accounts, fixedAssetCards);
     const noteTotals = computeNoteOpeningTotals(noteCards);
+    const arApTotals = computeArApOpeningTotals(arApCards);
     const merged = { ...manualOpeningBalances };
     accounts.forEach((a) => {
       if (a.isInventory) merged[a.id] = { debit: inventoryTotals[a.id] || 0, credit: 0 };
       if (a.isFixedAsset) merged[a.id] = { debit: costTotals[a.id] || 0, credit: 0 };
       if (a.isNoteAccount) {
         const total = noteTotals[a.id] || 0;
+        merged[a.id] = isDebitNormal(a) ? { debit: total, credit: 0 } : { debit: 0, credit: total };
+      }
+      if (a.isArApAccount) {
+        const total = arApTotals[a.id] || 0;
         merged[a.id] = isDebitNormal(a) ? { debit: total, credit: 0 } : { debit: 0, credit: total };
       }
     });
@@ -59,7 +75,7 @@ export function AppProvider({ children }) {
       }
     });
     return merged;
-  }, [manualOpeningBalances, inventoryItems, fixedAssetCards, noteCards, accounts]);
+  }, [manualOpeningBalances, inventoryItems, fixedAssetCards, noteCards, arApCards, accounts]);
 
   function addAccount(account) {
     setAccounts((prev) => [...prev, { ...account, id: `a${Date.now()}` }]);
@@ -79,13 +95,22 @@ export function AppProvider({ children }) {
     setInventoryItems((prev) => prev.filter((it) => it.accountId !== id));
     setFixedAssetCards((prev) => prev.filter((c) => c.accountId !== id));
     setNoteCards((prev) => prev.filter((c) => c.accountId !== id));
+    setArApCards((prev) => prev.filter((c) => c.accountId !== id));
   }
 
   // 【修改一】開帳借貸分欄：side 為 'debit' 或 'credit'，分別寫入該科目開帳金額的借方/貸方欄位
-  // 存貨科目、不動產廠房設備科目（及其配對的累計折舊科目）、應收/應付票據科目的期初餘額皆為明細加總，不可手動設定
+  // 存貨科目、不動產廠房設備科目（及其配對的累計折舊科目）、應收/應付票據科目、應收/應付帳款科目的期初餘額
+  // 皆為明細加總，不可手動設定
   function setOpeningBalance(accountId, side, amount) {
     const account = accounts.find((a) => a.id === accountId);
-    if (account?.isInventory || account?.isFixedAsset || account?.isNoteAccount) return;
+    if (
+      account?.isSummary ||
+      account?.isInventory ||
+      account?.isFixedAsset ||
+      account?.isNoteAccount ||
+      account?.isArApAccount
+    )
+      return;
     if (accounts.some((a) => a.isFixedAsset && a.depreciationAccountCode === account?.code)) return;
     setManualOpeningBalances((prev) => ({
       ...prev,
@@ -169,6 +194,30 @@ export function AppProvider({ children }) {
     setNoteCards((prev) => prev.filter((c) => c.id !== id));
   }
 
+  // 【修改七】應收/應付帳款客戶廠商明細卡
+  // fromOpening: true 表示此卡是在開帳頁面建立（無對應分錄，卡片金額本身即為起始未沖銷餘額）
+  // false（分錄登錄時新增）表示此卡的金額已由建立當下那筆分錄計入，起始未沖銷餘額為 0，避免重複計算
+  function addArApCard(accountId, card = {}) {
+    const newCard = {
+      id: nextArApCardId(),
+      accountId,
+      party: '',
+      amount: 0,
+      fromOpening: false,
+      ...card,
+    };
+    setArApCards((prev) => [...prev, newCard]);
+    return newCard.id;
+  }
+
+  function updateArApCard(id, patch) {
+    setArApCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }
+
+  function deleteArApCard(id) {
+    setArApCards((prev) => prev.filter((c) => c.id !== id));
+  }
+
   function addEntry(entry) {
     setEntries((prev) => [...prev, { ...entry, id: `e${Date.now()}` }]);
   }
@@ -177,12 +226,25 @@ export function AppProvider({ children }) {
     setEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
+  // 【修改八】建立/覆蓋期初資產負債表快照：把「當下」的科目與開帳金額深拷貝凍結起來，
+  // 之後不論科目設定、開帳金額、或分錄如何變動，這份快照都不會跟著改變，
+  // 「期初資產負債表」永遠只讀這份快照，不會每次重新從即時資料算
+  function finalizeOpening() {
+    setOpeningSnapshot({
+      finalizedAt: new Date().toISOString(),
+      accounts: JSON.parse(JSON.stringify(accounts)),
+      openingBalances: JSON.parse(JSON.stringify(openingBalances)),
+    });
+  }
+
   function importData(data) {
     if (data.accounts) setAccounts(data.accounts);
     if (data.openingBalances) setManualOpeningBalances(data.openingBalances);
     if (data.inventoryItems) setInventoryItems(data.inventoryItems);
     if (data.fixedAssetCards) setFixedAssetCards(data.fixedAssetCards);
     if (data.noteCards) setNoteCards(data.noteCards);
+    if (data.arApCards) setArApCards(data.arApCards);
+    if ('openingSnapshot' in data) setOpeningSnapshot(data.openingSnapshot);
     if (data.entries) setEntries(data.entries);
   }
 
@@ -206,7 +268,9 @@ export function AppProvider({ children }) {
     inventoryItems,
     fixedAssetCards,
     noteCards,
+    arApCards,
     entries,
+    openingSnapshot,
     addAccount,
     updateAccount,
     deleteAccount,
@@ -220,8 +284,12 @@ export function AppProvider({ children }) {
     addNoteCard,
     updateNoteCard,
     deleteNoteCard,
+    addArApCard,
+    updateArApCard,
+    deleteArApCard,
     addEntry,
     deleteEntry,
+    finalizeOpening,
     importData,
     loadStandardAccounts,
   };

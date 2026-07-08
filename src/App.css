@@ -20,6 +20,24 @@
 
 .import-export {
   display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.import-export-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.import-export-item .hint-text {
+  margin: 0;
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -27,7 +45,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  border-bottom: 2px solid #d7dbe2;
+  border-bottom: 2px solid var(--border-strong);
   margin-bottom: 20px;
 }
 
@@ -38,24 +56,71 @@
   cursor: pointer;
   font-size: 0.95rem;
   border-bottom: 3px solid transparent;
-  color: #4a4f5a;
+  color: var(--text-secondary);
 }
 
 .tab-button:hover {
-  background: #eaecf0;
+  background: var(--bg-hover);
 }
 
 .tab-button.active {
-  border-bottom-color: #2f6fed;
-  color: #2f6fed;
+  border-bottom-color: var(--accent);
+  color: var(--accent);
   font-weight: 600;
 }
 
 .tab-content {
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+/* 明細表分頁：左側可擴充清單／右側內容 */
+.detail-tab-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.detail-sidebar {
+  flex: 0 0 200px;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+
+.detail-sidebar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-sidebar-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.detail-sidebar-item:hover {
+  background: var(--bg-hover);
+}
+
+.detail-sidebar-item.active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: 600;
+}
+
+.detail-content {
+  flex: 1;
+  min-width: 0;
 }
 
 h2 {
@@ -71,17 +136,17 @@ h2 {
 
 .data-table th,
 .data-table td {
-  border: 1px solid #dfe2e8;
+  border: 1px solid var(--border-soft);
   padding: 6px 10px;
   text-align: left;
 }
 
 .data-table thead th {
-  background: #f0f2f6;
+  background: var(--bg-hover);
 }
 
 .data-table tfoot th {
-  background: #f7f8fb;
+  background: var(--bg-surface-alt);
 }
 
 .num-cell,
@@ -95,8 +160,10 @@ td.num-cell {
   width: 100%;
   text-align: right;
   padding: 4px 6px;
-  border: 1px solid #c9ced7;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .account-form {
@@ -110,58 +177,65 @@ td.num-cell {
 .account-form input,
 .account-form select {
   padding: 6px 8px;
-  border: 1px solid #c9ced7;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 button {
   padding: 6px 12px;
-  border: 1px solid #c9ced7;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
-  background: #fff;
+  background: var(--bg-surface);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
 button:hover {
-  background: #f0f2f6;
+  background: var(--bg-hover);
 }
 
 button[type='submit'] {
-  background: #2f6fed;
-  color: #fff;
-  border-color: #2f6fed;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
 }
 
 button[type='submit']:disabled {
-  background: #a9bde0;
-  border-color: #a9bde0;
+  background: var(--accent-disabled);
+  border-color: var(--accent-disabled);
   cursor: not-allowed;
 }
 
 .error-text {
-  color: #d33232;
+  color: var(--danger);
   font-weight: 600;
 }
 
 .input-warning {
-  border-color: #d9822b;
-  background: #fff8ef;
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
 }
 
 .warning-text {
-  color: #b5650a;
+  color: var(--warning-text);
   font-size: 0.78em;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .hint-text {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.85em;
   margin: 4px 0 12px;
 }
 
 .account-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
   margin-bottom: 12px;
 }
 
@@ -172,18 +246,62 @@ button[type='submit']:disabled {
 }
 
 tr.summary-row {
-  background: #f5f6f9;
+  background: var(--bg-surface-alt);
   font-weight: 600;
 }
 
+/* 【修改五】科目樹狀摺疊/展開 */
+.tree-code-cell {
+  white-space: nowrap;
+}
+
+.tree-toggle {
+  padding: 0 6px;
+  margin-right: 6px;
+  border-radius: 3px;
+  line-height: 1.2;
+  font-size: 0.85em;
+}
+
+.num-cell-readonly {
+  color: var(--text-readonly);
+  background: var(--bg-readonly);
+}
+
+tr.add-child-row td {
+  background: var(--bg-surface-alt);
+  border-top: none;
+}
+
+tr.add-child-row button {
+  font-size: 0.85em;
+  padding: 4px 10px;
+}
+
+.quick-add-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.quick-add-form input,
+.quick-add-form select {
+  padding: 4px 6px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
 .ok-text {
-  color: #1c8a4a;
+  color: var(--success);
   font-weight: 600;
 }
 
 .summary-box {
-  background: #f7f8fb;
-  border: 1px solid #e2e5eb;
+  background: var(--bg-surface-alt);
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
   padding: 12px 16px;
   margin-top: 12px;
@@ -194,7 +312,7 @@ tr.summary-row {
 }
 
 .entry-form {
-  border: 1px solid #e2e5eb;
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
   padding: 16px;
   margin-bottom: 20px;
@@ -216,8 +334,10 @@ tr.summary-row {
 
 .entry-header input {
   padding: 6px 8px;
-  border: 1px solid #c9ced7;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .entry-lines {
@@ -241,8 +361,10 @@ tr.summary-row {
 .line-row select {
   flex: 2;
   padding: 6px 8px;
-  border: 1px solid #c9ced7;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .line-row .num-input {
@@ -250,7 +372,7 @@ tr.summary-row {
 }
 
 .line-row-group {
-  border-bottom: 1px dashed #e2e5eb;
+  border-bottom: 1px dashed var(--border-soft);
   padding-bottom: 8px;
   margin-bottom: 8px;
 }
@@ -274,7 +396,7 @@ tr.summary-row {
 }
 
 .inventory-editor {
-  border: 1px solid #e2e5eb;
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
   padding: 12px 16px;
   margin-bottom: 16px;
@@ -303,4 +425,205 @@ tr.summary-row {
   .bs-columns {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================================
+   【介面修正一】科目列表欄寬調整：固定欄寬比例，避免「借貸」欄被擠到換行；
+   窄螢幕（<=768px）改為卡片式直向堆疊呈現
+   ============================================================ */
+.hint-icon {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--text-muted);
+  cursor: help;
+  font-size: 0.85em;
+}
+
+.responsive-tree-table {
+  table-layout: fixed;
+}
+
+.responsive-tree-table .col-code {
+  width: 130px;
+}
+
+.responsive-tree-table .col-name {
+  width: auto;
+  overflow-wrap: break-word;
+}
+
+.responsive-tree-table .col-type {
+  width: 64px;
+}
+
+.responsive-tree-table .col-direction {
+  width: 72px;
+  white-space: nowrap;
+}
+
+.responsive-tree-table .col-nature {
+  width: 240px;
+}
+
+.responsive-tree-table .col-action {
+  width: 110px;
+}
+
+/* 操作欄空間有限時，讓多顆按鈕改成上下並列，避免超出欄寬撐壞版面 */
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.action-buttons button {
+  width: 100%;
+}
+
+.responsive-tree-table .col-amount {
+  width: 170px;
+}
+
+@media (max-width: 768px) {
+  .responsive-tree-table,
+  .responsive-tree-table thead,
+  .responsive-tree-table tbody,
+  .responsive-tree-table tr,
+  .responsive-tree-table th,
+  .responsive-tree-table td {
+    display: block;
+    width: auto;
+  }
+
+  .responsive-tree-table thead tr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .responsive-tree-table tbody tr {
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+  }
+
+  .responsive-tree-table tbody tr.add-child-row {
+    border: none;
+    padding: 4px 0;
+    margin-bottom: 4px;
+  }
+
+  .responsive-tree-table td {
+    border: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding: 6px 4px;
+    text-align: right;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .responsive-tree-table tr.add-child-row td {
+    text-align: left;
+  }
+
+  .responsive-tree-table td[data-label]::before {
+    content: attr(data-label);
+    float: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .responsive-tree-table td.col-code {
+    text-align: left;
+    font-weight: 700;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .responsive-tree-table td.col-code::before {
+    content: none;
+  }
+
+  .responsive-tree-table td.col-name {
+    text-align: left;
+    padding-top: 0;
+  }
+
+  .responsive-tree-table td.col-name::before {
+    content: none;
+  }
+
+  .responsive-tree-table td.col-action {
+    text-align: left;
+    border-bottom: none;
+  }
+
+  .responsive-tree-table td.col-action::before {
+    content: none;
+  }
+
+  .responsive-tree-table tfoot tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    padding: 10px 8px;
+    background: var(--bg-surface-alt);
+    border-top: 2px solid var(--border-strong);
+  }
+
+  .responsive-tree-table tfoot th {
+    display: inline-block;
+    border: none;
+    padding: 0;
+    white-space: nowrap;
+  }
+}
+
+/* ============================================================
+   【介面修正二】票據明細卡「金額」輸入欄過窄：保留最小寬度，並允許整列橫向捲動
+   ============================================================ */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.note-card-table {
+  min-width: 640px;
+}
+
+.col-amount-wide {
+  min-width: 130px;
+}
+
+/* ============================================================
+   【介面修正四】新增科目表單固定於畫面底部，捲動科目列表時仍可持續使用
+   ============================================================ */
+.accounts-page {
+  padding-bottom: 260px;
+}
+
+.sticky-form-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-strong);
+  box-shadow: 0 -4px 12px var(--shadow-color-strong);
+  padding: 12px 24px;
+  max-height: 45vh;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.sticky-form-bar-inner {
+  max-width: 1052px;
+  margin: 0 auto;
+}
+
+.sticky-form-bar .account-form {
+  margin-bottom: 8px;
 }

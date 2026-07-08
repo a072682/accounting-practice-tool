@@ -20,6 +20,8 @@ export function defaultNormalBalance(type) {
 // isFixedAsset: true 表示此為「成本」科目，可建立資產卡（見【不動產廠房設備資產卡】功能）
 // depreciationAccountCode: 配對的累計折舊（抵銷）科目代號；留空表示不提折舊（如土地）
 // isNoteAccount: true 表示此為票據科目（應收票據／應付票據），可建立票據明細卡
+// isArApAccount: true 表示此為應收/應付帳款科目，可依客戶/廠商建立明細卡
+// allowanceAccountCode: 配對的備抵損失／呆帳（抵銷）科目代號；留空表示無配對的備抵科目
 function t(
   code,
   name,
@@ -30,7 +32,9 @@ function t(
   normalBalanceOverride = null,
   isFixedAsset = false,
   depreciationAccountCode = null,
-  isNoteAccount = false
+  isNoteAccount = false,
+  isArApAccount = false,
+  allowanceAccountCode = null
 ) {
   return {
     code,
@@ -43,6 +47,8 @@ function t(
     isFixedAsset,
     depreciationAccountCode,
     isNoteAccount,
+    isArApAccount,
+    allowanceAccountCode,
   };
 }
 
@@ -57,7 +63,7 @@ export const standardAccountTemplates = [
   t('1131', '應收票據', '資產', '1130', false, false, null, false, null, true),
   t('1132', '備抵損失－應收票據', '資產', '1130', false, false, '貸方'),
   t('1140', '應收帳款', '資產', null, true),
-  t('1141', '應收帳款', '資產', '1140'),
+  t('1141', '應收帳款', '資產', '1140', false, false, null, false, null, false, true, '1142'),
   t('1142', '備抵損失－應收帳款', '資產', '1140', false, false, '貸方'),
   t('1150', '其他應收款', '資產', null, true),
   t('1151', '應收收益', '資產', '1150'),
@@ -116,7 +122,7 @@ export const standardAccountTemplates = [
   t('2130', '應付票據', '負債', null, true),
   t('2131', '應付票據', '負債', '2130', false, false, null, false, null, true),
   t('2140', '應付帳款', '負債', null, true),
-  t('2141', '應付帳款', '負債', '2140'),
+  t('2141', '應付帳款', '負債', '2140', false, false, null, false, null, false, true, null),
   t('2150', '其他應付款', '負債', null, true),
   t('2151', '應付費用', '負債', '2150'),
   t('2152', '應付土地房屋款', '負債', '2150'),
@@ -150,6 +156,11 @@ export const standardAccountTemplates = [
   t('3121', '業主往來', '權益', '3120'),
   t('3130', '本期損益', '權益', null, true),
   t('3131', '本期損益', '權益', '3130'),
+  t('3140', '股本', '權益', null, true),
+  t('3141', '普通股股本', '權益', '3140'),
+  t('3150', '保留盈餘', '權益', null, true),
+  t('3151', '法定盈餘公積', '權益', '3150'),
+  t('3152', '保留盈餘（未分配）', '權益', '3150'),
 
   // ===== 4xxx 收益 =====
   t('4101', '銷貨收入', '收益'),
