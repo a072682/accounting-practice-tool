@@ -18,6 +18,8 @@ const emptyForm = {
   allowanceAccountCode: '',
   isAdvanceAccount: false,
   isAmortizedAccount: false,
+  isSalesRevenueAccount: false,
+  isCogsAccount: false,
   normalBalance: defaultNormalBalance('資產'),
 };
 
@@ -81,6 +83,8 @@ export default function AccountsTab() {
       allowanceAccountCode: form.isArApAccount ? form.allowanceAccountCode.trim() || null : null,
       isAdvanceAccount: form.isSummary ? false : form.isAdvanceAccount,
       isAmortizedAccount: form.isSummary ? false : form.isAmortizedAccount,
+      isSalesRevenueAccount: form.isSummary ? false : form.isSalesRevenueAccount,
+      isCogsAccount: form.isSummary ? false : form.isCogsAccount,
       normalBalance: form.normalBalance,
     };
     if (editingId) {
@@ -107,6 +111,8 @@ export default function AccountsTab() {
       allowanceAccountCode: acc.allowanceAccountCode || '',
       isAdvanceAccount: !!acc.isAdvanceAccount,
       isAmortizedAccount: !!acc.isAmortizedAccount,
+      isSalesRevenueAccount: !!acc.isSalesRevenueAccount,
+      isCogsAccount: !!acc.isCogsAccount,
       normalBalance: acc.normalBalance || defaultNormalBalance(acc.type),
     });
     setError('');
@@ -192,6 +198,8 @@ export default function AccountsTab() {
                   {isArApAllowancePairAccount(accounts, acc) ? '／備抵損失呆帳科目' : ''}
                   {acc.isAdvanceAccount ? '／預付貨款或預收貨款（對象明細卡）' : ''}
                   {acc.isAmortizedAccount ? '／預付費用或預收收入（攤銷明細卡）' : ''}
+                  {acc.isSalesRevenueAccount ? '／銷貨收入（品項明細）' : ''}
+                  {acc.isCogsAccount ? '／銷貨成本（品項明細）' : ''}
                 </td>
                 <td className="col-action" data-label="操作">
                   <div className="action-buttons">
@@ -318,6 +326,24 @@ export default function AccountsTab() {
                 onChange={(e) => setForm({ ...form, isAmortizedAccount: e.target.checked })}
               />
               預付費用/預收收入科目（啟用攤銷明細卡）
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.isSalesRevenueAccount}
+                disabled={form.isSummary}
+                onChange={(e) => setForm({ ...form, isSalesRevenueAccount: e.target.checked })}
+              />
+              銷貨收入科目（分錄登錄時啟用品項/售價/數量明細）
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.isCogsAccount}
+                disabled={form.isSummary}
+                onChange={(e) => setForm({ ...form, isCogsAccount: e.target.checked })}
+              />
+              銷貨成本科目（分錄登錄時啟用品項/數量明細，成本自動取加權平均成本）
             </label>
             <button type="submit">{editingId ? '更新科目' : '新增科目'}</button>
             {editingId && (

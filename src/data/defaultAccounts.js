@@ -217,6 +217,15 @@ export const standardAccountTemplates = [
   t('5304', '處分投資損失', '費損'),
 ];
 
+// isSalesRevenueAccount / isCogsAccount：分錄登錄頁用來判斷是否觸發「銷貨品項明細輸入模式」
+// （品項／售價或成本／數量），不透過 t() 的一長串位置參數指定，改於此依代號設定，避免既有呼叫都要補一堆 false/null
+const SALES_REVENUE_CODES = ['4101'];
+const COGS_CODES = ['5101'];
+standardAccountTemplates.forEach((tpl) => {
+  tpl.isSalesRevenueAccount = SALES_REVENUE_CODES.includes(tpl.code);
+  tpl.isCogsAccount = COGS_CODES.includes(tpl.code);
+});
+
 let idCounter = 0;
 function nextId() {
   idCounter += 1;

@@ -306,22 +306,27 @@ export function computeInventoryOpeningTotals(inventoryItems) {
 }
 
 // 依「期初品項 + 分錄中的進貨/銷貨異動」重播，算出每個品項目前的數量與金額
-// 分錄借方（進貨）：qty、amount 直接累加
-// 分錄貸方（銷貨）：qty、amount 直接扣除（amount 為分錄登錄當下依加權平均法算好的成本）
-export function computeInventoryState(inventoryItems, entries) {
+// 分錄借方（進貨，存貨科目）：qty、amount 直接累加
+// 分錄貸方（銷貨，存貨科目）：qty、amount 直接扣除（amount 為分錄登錄當下依加權平均法算好的成本）
+// 只有科目本身是「存貨科目」(isInventory) 的分錄行才會異動庫存；銷貨成本科目的分錄行雖然也帶 itemId
+// （用於自動代入加權平均成本），但那只是引用成本，不代表庫存異動，庫存異動一律以存貨科目那一行為準，
+// 否則同一筆銷貨會被銷貨成本行與存貨行重複扣減兩次。
+export function computeInventoryState(accounts, inventoryItems, entries) {
   const state = {};
   inventoryItems.forEach((item) => {
     state[item.id] = { qty: Number(item.openingQty || 0), value: inventoryOpeningValue(item) };
   });
   entries.forEach((entry) => {
     entry.debits.forEach((d) => {
-      if (d.itemId && state[d.itemId]) {
+      const account = accounts.find((a) => a.id === d.accountId);
+      if (account?.isInventory && d.itemId && state[d.itemId]) {
         state[d.itemId].qty += Number(d.qty || 0);
         state[d.itemId].value += Number(d.amount || 0);
       }
     });
     entry.credits.forEach((c) => {
-      if (c.itemId && state[c.itemId]) {
+      const account = accounts.find((a) => a.id === c.accountId);
+      if (account?.isInventory && c.itemId && state[c.itemId]) {
         state[c.itemId].qty -= Number(c.qty || 0);
         state[c.itemId].value -= Number(c.amount || 0);
       }

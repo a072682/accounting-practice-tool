@@ -4,7 +4,7 @@ import { computeInventoryState, formatNumber, inventoryAvgCost, sortAccountsByCo
 export default function InventoryDetailPanel() {
   const { accounts, inventoryItems, entries } = useApp();
   const inventoryAccounts = sortAccountsByCode(accounts.filter((a) => a.isInventory && !a.isSummary));
-  const state = computeInventoryState(inventoryItems, entries);
+  const state = computeInventoryState(accounts, inventoryItems, entries);
 
   return (
     <div>

@@ -23,6 +23,7 @@ function emptyLine() {
     itemId: '',
     qty: '',
     unitCost: '',
+    price: '',
     noteId: '',
     arApId: '',
     party: '',
@@ -33,8 +34,13 @@ function emptyLine() {
   };
 }
 
-// mode: 'debit'（進貨，增加存貨數量，單位成本可手動輸入）
-//       'credit'（銷貨，減少存貨數量，成本依目前加權平均單位成本自動計算）
+// 是否為觸發「品項明細輸入模式」的科目：存貨（進貨/銷貨扣庫存）、銷貨收入（售價×數量）、銷貨成本（成本×數量）
+function isItemAccount(account) {
+  return !!(account?.isInventory || account?.isSalesRevenueAccount || account?.isCogsAccount);
+}
+
+// mode: 'debit'（存貨＝進貨，增加存貨數量，單位成本可手動輸入；銷貨成本＝依目前加權平均單位成本自動計算）
+//       'credit'（存貨＝銷貨，減少存貨數量，成本依目前加權平均單位成本自動計算；銷貨收入＝售價可手動輸入）
 function LineEditor({
   label,
   mode,
@@ -61,6 +67,7 @@ function LineEditor({
             itemId: '',
             qty: '',
             unitCost: '',
+            price: '',
             noteId: '',
             arApId: '',
             party: '',
@@ -68,7 +75,7 @@ function LineEditor({
             issueDate: '',
             dueDate: '',
             bankAccount: '',
-            amount: account?.isInventory ? '' : merged.amount,
+            amount: isItemAccount(account) ? '' : merged.amount,
           };
         }
 
@@ -82,6 +89,17 @@ function LineEditor({
             merged.unitCost = avgCost;
             merged.amount = qty && avgCost ? qty * avgCost : '';
           }
+        } else if (account?.isCogsAccount) {
+          // 銷貨成本：品項＋數量，成本自動代入目前加權平均單位成本（僅供計算金額，不異動庫存）
+          const qty = Number(merged.qty) || 0;
+          const avgCost = inventoryAvgCost(inventoryState, merged.itemId);
+          merged.unitCost = avgCost;
+          merged.amount = qty && avgCost ? qty * avgCost : '';
+        } else if (account?.isSalesRevenueAccount) {
+          // 銷貨收入：品項＋售價（手動輸入）＋數量，金額＝售價×數量
+          const qty = Number(merged.qty) || 0;
+          const price = Number(merged.price) || 0;
+          merged.amount = qty && price ? qty * price : '';
         }
 
         // 【修改四】沖銷既有票據時，預設帶入該票據目前的未沖銷餘額作為金額（可手動調整為部分沖銷）
@@ -111,9 +129,14 @@ function LineEditor({
       <h4>{label}</h4>
       {lines.map((line, idx) => {
         const account = accounts.find((a) => a.id === line.accountId);
-        const items = account?.isInventory ? inventoryItems.filter((it) => it.accountId === account.id) : [];
+        // 存貨科目的品項僅限該存貨科目底下的品項；銷貨收入／銷貨成本不綁定單一存貨科目，可選任何品項
+        const items = account?.isInventory
+          ? inventoryItems.filter((it) => it.accountId === account.id)
+          : account?.isCogsAccount || account?.isSalesRevenueAccount
+          ? inventoryItems
+          : [];
         const available = line.itemId ? inventoryState[line.itemId]?.qty || 0 : 0;
-        const insufficient = mode === 'credit' && line.itemId && Number(line.qty) > available;
+        const insufficient = account?.isInventory && mode === 'credit' && line.itemId && Number(line.qty) > available;
 
         const noteIncrease = account?.isNoteAccount && isNoteIncreaseLine(account, mode);
         const noteSettle = account?.isNoteAccount && !isNoteIncreaseLine(account, mode);
@@ -142,7 +165,7 @@ function LineEditor({
                   </option>
                 ))}
               </select>
-              {account?.isInventory ? (
+              {isItemAccount(account) ? (
                 <span className="num-cell">{line.amount === '' ? '' : formatNumber(line.amount)}</span>
               ) : (
                 <input
@@ -159,7 +182,7 @@ function LineEditor({
                 </button>
               )}
             </div>
-            {account?.isInventory && (
+            {isItemAccount(account) && (
               <div className="line-row inventory-line">
                 <select value={line.itemId} onChange={(e) => updateLine(idx, { itemId: e.target.value })}>
                   <option value="">選擇品項</option>
@@ -176,7 +199,7 @@ function LineEditor({
                   value={line.qty}
                   onChange={(e) => updateLine(idx, { qty: e.target.value })}
                 />
-                {mode === 'debit' ? (
+                {account?.isInventory && mode === 'debit' && (
                   <input
                     type="number"
                     className="num-input"
@@ -184,11 +207,26 @@ function LineEditor({
                     value={line.unitCost}
                     onChange={(e) => updateLine(idx, { unitCost: e.target.value })}
                   />
-                ) : (
+                )}
+                {account?.isInventory && mode === 'credit' && (
                   <span className="hint-text">
                     加權平均單位成本 {formatNumber(inventoryAvgCost(inventoryState, line.itemId))}
                     　現有數量 {formatNumber(available)}
                   </span>
+                )}
+                {account?.isCogsAccount && (
+                  <span className="hint-text">
+                    加權平均單位成本（銷貨成本） {formatNumber(inventoryAvgCost(inventoryState, line.itemId))}
+                  </span>
+                )}
+                {account?.isSalesRevenueAccount && (
+                  <input
+                    type="number"
+                    className="num-input"
+                    placeholder="售價"
+                    value={line.price}
+                    onChange={(e) => updateLine(idx, { price: e.target.value })}
+                  />
                 )}
               </div>
             )}
@@ -297,7 +335,7 @@ export default function JournalEntryTab() {
   const { accounts, entries, inventoryItems, noteCards, addNoteCard, arApCards, addArApCard, addEntry, deleteEntry } =
     useApp();
   const selectableAccounts = sortAccountsByCode(accounts.filter((a) => !a.isSummary));
-  const inventoryState = computeInventoryState(inventoryItems, entries);
+  const inventoryState = computeInventoryState(accounts, inventoryItems, entries);
   const noteState = computeNoteState(accounts, noteCards, entries);
   const arApState = computeArApState(accounts, arApCards, entries);
   const [date, setDate] = useState(today());
@@ -322,7 +360,7 @@ export default function JournalEntryTab() {
   function isValidLine(line, side) {
     const account = accounts.find((a) => a.id === line.accountId);
     if (!account || !(Number(line.amount) > 0)) return false;
-    if (account.isInventory && (!line.itemId || !(Number(line.qty) > 0))) return false;
+    if (isItemAccount(account) && (!line.itemId || !(Number(line.qty) > 0))) return false;
     if (account.isNoteAccount) {
       if (isNoteIncreaseLine(account, side)) {
         if (!line.party.trim()) return false;
@@ -430,8 +468,11 @@ export default function JournalEntryTab() {
     function toLine(l, side) {
       const account = accounts.find((a) => a.id === l.accountId);
       const base = { accountId: l.accountId, amount: Number(l.amount) };
-      if (account?.isInventory) {
+      if (account?.isInventory || account?.isCogsAccount) {
         return { ...base, itemId: l.itemId, qty: Number(l.qty), unitCost: Number(l.unitCost) || 0 };
+      }
+      if (account?.isSalesRevenueAccount) {
+        return { ...base, itemId: l.itemId, qty: Number(l.qty), price: Number(l.price) || 0 };
       }
       if (account?.isNoteAccount) {
         if (isNoteIncreaseLine(account, side)) {
@@ -514,7 +555,10 @@ export default function JournalEntryTab() {
         </div>
 
         <p className="hint-text">
-          當借貸方選到存貨科目時：借方＝進貨（輸入品項、數量、單位成本），貸方＝銷貨（輸入品項與數量，成本依目前加權平均單位成本自動計算）。
+          當借貸方選到存貨科目時：借方＝進貨（輸入品項、數量、單位成本），貸方＝銷貨（輸入品項與數量，成本依目前加權平均單位成本自動計算，並扣減庫存）。
+          當貸方選到銷貨收入科目時：輸入品項、售價、數量，金額自動＝售價×數量加總。
+          當借方選到銷貨成本科目時：輸入品項與數量，成本依目前加權平均單位成本自動計算（僅計算金額，不重複扣減庫存，庫存異動仍以貸方存貨那一列為準）。
+          進行銷貨時建議同時登錄四列：借方應收帳款/現金、借方銷貨成本、貸方銷貨收入、貸方存貨。
           當借貸方選到應收/應付票據或應收/應付帳款科目時：與科目正常餘額方向同側＝新增票據或客戶/廠商欠款（填入對象等欄位），
           異側＝沖銷既有票據或欠款（選擇特定一筆，可部分沖銷）。
         </p>
