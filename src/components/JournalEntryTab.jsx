@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   computeInventoryState,
+  computeAdvanceState,
   computeArApState,
   computeNoteState,
   entryCreditTotal,
   entryDebitTotal,
   formatNumber,
   inventoryAvgCost,
+  isAdvanceIncreaseLine,
   isArApIncreaseLine,
   isDebitNormal,
   isNoteIncreaseLine,
@@ -26,6 +28,7 @@ function emptyLine() {
     price: '',
     noteId: '',
     arApId: '',
+    advanceId: '',
     party: '',
     noteNumber: '',
     issueDate: '',
@@ -53,6 +56,8 @@ function LineEditor({
   noteState,
   arApCards,
   arApState,
+  advanceCards,
+  advanceState,
 }) {
   function updateLine(idx, patch) {
     setLines(
@@ -70,6 +75,7 @@ function LineEditor({
             price: '',
             noteId: '',
             arApId: '',
+            advanceId: '',
             party: '',
             noteNumber: '',
             issueDate: '',
@@ -113,6 +119,12 @@ function LineEditor({
           const remaining = arApState[patch.arApId]?.remaining || 0;
           if (!merged.amount) merged.amount = remaining || '';
         }
+
+        // 貨到沖銷既有預付/預收貨款時，預設帶入目前未沖銷餘額作為金額（可手動調整為部分沖銷）
+        if (account?.isAdvanceAccount && !isAdvanceIncreaseLine(account, mode) && 'advanceId' in patch) {
+          const remaining = advanceState[patch.advanceId]?.remaining || 0;
+          if (!merged.amount) merged.amount = remaining || '';
+        }
         return merged;
       })
     );
@@ -153,6 +165,15 @@ function LineEditor({
           : [];
         const arApSettleRemaining = line.arApId ? arApState[line.arApId]?.remaining || 0 : 0;
         const arApSettleExceeded = arApSettle && line.arApId && Number(line.amount) - arApSettleRemaining > 0.005;
+
+        const advanceIncrease = account?.isAdvanceAccount && isAdvanceIncreaseLine(account, mode);
+        const advanceSettle = account?.isAdvanceAccount && !isAdvanceIncreaseLine(account, mode);
+        const advanceSettleOptions = advanceSettle
+          ? advanceCards.filter((c) => c.accountId === account.id && (advanceState[c.id]?.remaining || 0) > 0.005)
+          : [];
+        const advanceSettleRemaining = line.advanceId ? advanceState[line.advanceId]?.remaining || 0 : 0;
+        const advanceSettleExceeded =
+          advanceSettle && line.advanceId && Number(line.amount) - advanceSettleRemaining > 0.005;
 
         return (
           <div className="line-row-group" key={idx}>
@@ -321,6 +342,34 @@ function LineEditor({
             {arApSettleExceeded && (
               <p className="error-text">沖銷金額超過此對象未沖銷餘額（餘額 {formatNumber(arApSettleRemaining)}）</p>
             )}
+
+            {advanceIncrease && (
+              <div className="line-row inventory-line">
+                <input
+                  placeholder={isDebitNormal(account) ? '廠商名稱' : '客戶名稱'}
+                  value={line.party}
+                  onChange={(e) => updateLine(idx, { party: e.target.value })}
+                />
+              </div>
+            )}
+            {advanceSettle && (
+              <div className="line-row inventory-line">
+                <select value={line.advanceId} onChange={(e) => updateLine(idx, { advanceId: e.target.value })}>
+                  <option value="">選擇要沖銷的對象</option>
+                  {advanceSettleOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.party || '(未命名)'}（餘額 {formatNumber(advanceState[c.id]?.remaining || 0)}）
+                    </option>
+                  ))}
+                </select>
+                {line.advanceId && (
+                  <span className="hint-text">未沖銷餘額 {formatNumber(advanceSettleRemaining)}</span>
+                )}
+              </div>
+            )}
+            {advanceSettleExceeded && (
+              <p className="error-text">沖銷金額超過此對象未沖銷餘額（餘額 {formatNumber(advanceSettleRemaining)}）</p>
+            )}
           </div>
         );
       })}
@@ -332,12 +381,24 @@ function LineEditor({
 }
 
 export default function JournalEntryTab() {
-  const { accounts, entries, inventoryItems, noteCards, addNoteCard, arApCards, addArApCard, addEntry, deleteEntry } =
-    useApp();
+  const {
+    accounts,
+    entries,
+    inventoryItems,
+    noteCards,
+    addNoteCard,
+    arApCards,
+    addArApCard,
+    advanceCards,
+    addAdvanceCard,
+    addEntry,
+    deleteEntry,
+  } = useApp();
   const selectableAccounts = sortAccountsByCode(accounts.filter((a) => !a.isSummary));
   const inventoryState = computeInventoryState(accounts, inventoryItems, entries);
   const noteState = computeNoteState(accounts, noteCards, entries);
   const arApState = computeArApState(accounts, arApCards, entries);
+  const advanceState = computeAdvanceState(accounts, advanceCards, entries);
   const [date, setDate] = useState(today());
   const [description, setDescription] = useState('');
   const [debits, setDebits] = useState([emptyLine()]);
@@ -372,6 +433,13 @@ export default function JournalEntryTab() {
       if (isArApIncreaseLine(account, side)) {
         if (!line.party.trim()) return false;
       } else if (!line.arApId) {
+        return false;
+      }
+    }
+    if (account.isAdvanceAccount) {
+      if (isAdvanceIncreaseLine(account, side)) {
+        if (!line.party.trim()) return false;
+      } else if (!line.advanceId) {
         return false;
       }
     }
@@ -449,6 +517,26 @@ export default function JournalEntryTab() {
       }
     }
 
+    // 檢查預付/預收貨款沖銷金額是否超過該對象未沖銷餘額
+    const settleAmountByAdvance = {};
+    [
+      ...validDebits.map((l) => ({ l, side: 'debit' })),
+      ...validCredits.map((l) => ({ l, side: 'credit' })),
+    ].forEach(({ l, side }) => {
+      const account = accounts.find((a) => a.id === l.accountId);
+      if (account?.isAdvanceAccount && !isAdvanceIncreaseLine(account, side)) {
+        settleAmountByAdvance[l.advanceId] = (settleAmountByAdvance[l.advanceId] || 0) + Number(l.amount);
+      }
+    });
+    for (const advanceId of Object.keys(settleAmountByAdvance)) {
+      const remaining = advanceState[advanceId]?.remaining || 0;
+      if (settleAmountByAdvance[advanceId] - remaining > 0.005) {
+        const card = advanceCards.find((c) => c.id === advanceId);
+        setError(`對象「${card?.party || advanceId}」沖銷金額超過未沖銷餘額（餘額 ${formatNumber(remaining)}）`);
+        return;
+      }
+    }
+
     // 【介面修正三】支票帳戶欄位只接受既有科目代號，儲存前擋下無效輸入
     for (const l of validCredits.concat(validDebits)) {
       const account = accounts.find((a) => a.id === l.accountId);
@@ -495,6 +583,13 @@ export default function JournalEntryTab() {
         }
         return { ...base, arApId: l.arApId };
       }
+      if (account?.isAdvanceAccount) {
+        if (isAdvanceIncreaseLine(account, side)) {
+          const newId = addAdvanceCard(account.id, { party: l.party.trim(), amount: Number(l.amount) });
+          return { ...base, advanceId: newId };
+        }
+        return { ...base, advanceId: l.advanceId };
+      }
       return base;
     }
 
@@ -527,13 +622,19 @@ export default function JournalEntryTab() {
     return card ? card.party || '(未命名)' : '(已刪除對象)';
   }
 
+  function advanceLabel(id) {
+    const card = advanceCards.find((c) => c.id === id);
+    return card ? card.party || '(未命名)' : '(已刪除對象)';
+  }
+
   function renderLine(l, i) {
     return (
       <div key={i}>
         {accountLabel(l.accountId)}
         {l.itemId ? ` ［${itemLabel(l.itemId)} x ${formatNumber(l.qty)}］` : ''}
         {l.noteId ? ` ［${noteLabel(l.noteId)}］` : ''}
-        {l.arApId ? ` ［${arApLabel(l.arApId)}］` : ''}{' '}
+        {l.arApId ? ` ［${arApLabel(l.arApId)}］` : ''}
+        {l.advanceId ? ` ［${advanceLabel(l.advanceId)}］` : ''}{' '}
         <span className="num-cell">{formatNumber(l.amount)}</span>
       </div>
     );
@@ -559,8 +660,8 @@ export default function JournalEntryTab() {
           當貸方選到銷貨收入科目時：輸入品項、售價、數量，金額自動＝售價×數量加總。
           當借方選到銷貨成本科目時：輸入品項與數量，成本依目前加權平均單位成本自動計算（僅計算金額，不重複扣減庫存，庫存異動仍以貸方存貨那一列為準）。
           進行銷貨時建議同時登錄四列：借方應收帳款/現金、借方銷貨成本、貸方銷貨收入、貸方存貨。
-          當借貸方選到應收/應付票據或應收/應付帳款科目時：與科目正常餘額方向同側＝新增票據或客戶/廠商欠款（填入對象等欄位），
-          異側＝沖銷既有票據或欠款（選擇特定一筆，可部分沖銷）。
+          當借貸方選到應收/應付票據、應收/應付帳款、或預付/預收貨款科目時：與科目正常餘額方向同側＝新增票據、客戶/廠商欠款或預付/預收款項（填入對象等欄位），
+          異側＝沖銷既有票據、欠款或預付/預收款項（選擇特定對象，可部分沖銷）。
         </p>
 
         <div className="entry-lines">
@@ -576,6 +677,8 @@ export default function JournalEntryTab() {
             noteState={noteState}
             arApCards={arApCards}
             arApState={arApState}
+            advanceCards={advanceCards}
+            advanceState={advanceState}
           />
           <LineEditor
             label="貸方"
@@ -589,6 +692,8 @@ export default function JournalEntryTab() {
             noteState={noteState}
             arApCards={arApCards}
             arApState={arApState}
+            advanceCards={advanceCards}
+            advanceState={advanceState}
           />
         </div>
 

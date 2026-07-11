@@ -264,6 +264,7 @@ export function AppProvider({ children }) {
       accountId,
       party: '',
       amount: 0,
+      fromOpening: false,
       ...card,
     };
     setAdvanceCards((prev) => [...prev, newCard]);

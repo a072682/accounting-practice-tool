@@ -468,7 +468,7 @@ function AdvanceOpeningEditor({ account }) {
           </tr>
         </tfoot>
       </table>
-      <button type="button" onClick={() => addAdvanceCard(account.id)}>
+      <button type="button" onClick={() => addAdvanceCard(account.id, { fromOpening: true })}>
         + 新增{isPayable ? '客戶' : '廠商'}
       </button>
     </div>

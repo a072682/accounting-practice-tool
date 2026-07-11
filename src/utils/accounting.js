@@ -505,12 +505,40 @@ export function isArApAllowancePairAccount(accounts, account) {
 // 邏輯比照【修改七】應收/應付帳款明細卡，但這是等貨物到齊後一次沖銷，不是按時間分期認列，
 // 故不需要攤銷欄位，也不追蹤沖銷狀態，單純以卡片金額加總作為該科目的開帳金額
 // ============================================================
+// 依科目彙總「開帳時建立」的對象卡金額，作為該預付/預收貨款科目的期初餘額
+// 分錄登錄時新增的卡（fromOpening 為 false）不計入期初餘額，其金額已經由該筆分錄自身反映在借貸金額中
 export function computeAdvanceOpeningTotals(advanceCards) {
   const totals = {};
   advanceCards.forEach((card) => {
+    if (!card.fromOpening) return;
     totals[card.accountId] = (totals[card.accountId] || 0) + Number(card.amount || 0);
   });
   return totals;
+}
+
+// 某一筆分錄借/貸方分錄行，對預付/預收貨款科目而言是「新增預付/預收」還是「貨到沖銷既有預付/預收」
+// 與科目正常餘額方向同側 → 新增；異側 → 沖銷（貨到，可部分沖銷）
+export function isAdvanceIncreaseLine(account, side) {
+  return (side === 'debit') === isDebitNormal(account);
+}
+
+// 依「期初對象卡金額 + 分錄中新增/沖銷的異動」重播，算出每張卡目前的未沖銷餘額
+export function computeAdvanceState(accounts, advanceCards, entries) {
+  const state = {};
+  advanceCards.forEach((card) => {
+    state[card.id] = { remaining: card.fromOpening ? Number(card.amount || 0) : 0 };
+  });
+  function applyLine(line, side) {
+    if (!line.advanceId || !state[line.advanceId]) return;
+    const account = accounts.find((a) => a.id === line.accountId);
+    const delta = isAdvanceIncreaseLine(account, side) ? Number(line.amount || 0) : -Number(line.amount || 0);
+    state[line.advanceId].remaining += delta;
+  }
+  entries.forEach((entry) => {
+    entry.debits.forEach((d) => applyLine(d, 'debit'));
+    entry.credits.forEach((c) => applyLine(c, 'credit'));
+  });
+  return state;
 }
 // ============================================================
 // 【新增結束】
