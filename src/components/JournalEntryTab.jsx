@@ -30,6 +30,7 @@ function emptyLine() {
     noteId: '',
     arApId: '',
     advanceId: '',
+    amortizationId: '',
     party: '',
     noteNumber: '',
     issueDate: '',
@@ -94,6 +95,7 @@ function LineEditor({
             noteId: '',
             arApId: '',
             advanceId: '',
+            amortizationId: '',
             party: '',
             noteNumber: '',
             issueDate: '',
@@ -464,25 +466,40 @@ export default function JournalEntryTab() {
     inventoryItems,
     noteCards,
     addNoteCard,
+    updateNoteCard,
+    deleteNoteCard,
     arApCards,
     addArApCard,
+    updateArApCard,
+    deleteArApCard,
     advanceCards,
     addAdvanceCard,
+    updateAdvanceCard,
+    deleteAdvanceCard,
     amortizationCards,
     addAmortizationCard,
+    updateAmortizationCard,
+    deleteAmortizationCard,
     addEntry,
+    updateEntry,
     deleteEntry,
   } = useApp();
   const selectableAccounts = sortAccountsByCode(accounts.filter((a) => !a.isSummary));
-  const inventoryState = computeInventoryState(accounts, inventoryItems, entries);
-  const noteState = computeNoteState(accounts, noteCards, entries);
-  const arApState = computeArApState(accounts, arApCards, entries);
-  const advanceState = computeAdvanceState(accounts, advanceCards, entries);
   const [date, setDate] = useState(today());
   const [description, setDescription] = useState('');
   const [debits, setDebits] = useState([emptyLine()]);
   const [credits, setCredits] = useState([emptyLine()]);
   const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState(null);
+
+  // 編輯既有分錄時，先把該筆分錄從重播計算中排除（等同「先還原」原本的異動），
+  // 讓存貨/票據/應收應付/預付預收的餘額與可沖銷選項回到「這筆分錄尚未存在」的狀態；
+  // 送出時再用新內容整筆覆蓋回去（等同「再套用」），全程不需要手動計算差額
+  const entriesForState = editingId ? entries.filter((e) => e.id !== editingId) : entries;
+  const inventoryState = computeInventoryState(accounts, inventoryItems, entriesForState);
+  const noteState = computeNoteState(accounts, noteCards, entriesForState);
+  const arApState = computeArApState(accounts, arApCards, entriesForState);
+  const advanceState = computeAdvanceState(accounts, advanceCards, entriesForState);
 
   const debitTotal = entryDebitTotal({ debits });
   const creditTotal = entryCreditTotal({ credits });
@@ -495,6 +512,104 @@ export default function JournalEntryTab() {
     setDebits([emptyLine()]);
     setCredits([emptyLine()]);
     setError('');
+    setEditingId(null);
+  }
+
+  // 把已儲存的分錄行還原成表單可編輯的格式：對於「新增明細卡」那一側的分錄行，
+  // 額外把當初建立的卡片內容（對象/票據號碼/項目名稱等）帶回表單，讓使用者可以直接修改
+  function lineFromStored(l, side) {
+    const account = accounts.find((a) => a.id === l.accountId);
+    const line = { ...emptyLine(), accountId: l.accountId, amount: l.amount, note: l.note || '' };
+    if (!account) return line;
+    if (account.isInventory || account.isCogsAccount) {
+      line.itemId = l.itemId || '';
+      line.qty = l.qty ?? '';
+      line.unitCost = l.unitCost ?? '';
+    } else if (account.isSalesRevenueAccount) {
+      line.itemId = l.itemId || '';
+      line.qty = l.qty ?? '';
+      line.price = l.price ?? '';
+    } else if (account.isNoteAccount) {
+      line.noteId = l.noteId || '';
+      if (isNoteIncreaseLine(account, side)) {
+        const card = noteCards.find((c) => c.id === l.noteId);
+        if (card) {
+          line.party = card.party || '';
+          line.noteNumber = card.noteNumber || '';
+          line.issueDate = card.issueDate || '';
+          line.dueDate = card.dueDate || '';
+          line.bankAccount = card.bankAccount || '';
+        }
+      }
+    } else if (account.isArApAccount) {
+      line.arApId = l.arApId || '';
+      if (isArApIncreaseLine(account, side)) {
+        const card = arApCards.find((c) => c.id === l.arApId);
+        if (card) line.party = card.party || '';
+      }
+    } else if (account.isAdvanceAccount) {
+      line.advanceId = l.advanceId || '';
+      if (isAdvanceIncreaseLine(account, side)) {
+        const card = advanceCards.find((c) => c.id === l.advanceId);
+        if (card) line.party = card.party || '';
+      }
+    } else if (account.isAmortizedAccount) {
+      line.amortizationId = l.amortizationId || '';
+      if (isAmortizedIncreaseLine(account, side)) {
+        const card = amortizationCards.find((c) => c.id === l.amortizationId);
+        if (card) {
+          line.amortName = card.name || '';
+          line.party = card.party || '';
+          line.amortStartDate = card.startDate || '';
+          line.amortMonths = card.months ?? '';
+          line.amortTaxAmount = card.taxAmount ?? '';
+        }
+      }
+    }
+    return line;
+  }
+
+  function startEdit(entry) {
+    setEditingId(entry.id);
+    setDate(entry.date);
+    setDescription(entry.description);
+    setDebits(entry.debits.map((l) => lineFromStored(l, 'debit')));
+    setCredits(entry.credits.map((l) => lineFromStored(l, 'credit')));
+    setError('');
+  }
+
+  function cancelEdit() {
+    resetForm();
+  }
+
+  // 蒐集某一側分錄行中，屬於「新增明細卡」（與科目正常餘額方向同側）的卡片參照，
+  // 用來比對編輯前後哪些卡片已經不再被使用（需要刪除，避免殘留錯誤資料）
+  function collectCreatedCardRefs(lines, side) {
+    const refs = [];
+    (lines || []).forEach((l) => {
+      const account = accounts.find((a) => a.id === l.accountId);
+      if (!account) return;
+      if (account.isNoteAccount && isNoteIncreaseLine(account, side) && l.noteId) {
+        refs.push({ type: 'note', id: l.noteId });
+      }
+      if (account.isArApAccount && isArApIncreaseLine(account, side) && l.arApId) {
+        refs.push({ type: 'arap', id: l.arApId });
+      }
+      if (account.isAdvanceAccount && isAdvanceIncreaseLine(account, side) && l.advanceId) {
+        refs.push({ type: 'advance', id: l.advanceId });
+      }
+      if (account.isAmortizedAccount && isAmortizedIncreaseLine(account, side) && l.amortizationId) {
+        refs.push({ type: 'amort', id: l.amortizationId });
+      }
+    });
+    return refs;
+  }
+
+  function deleteCardRef(ref) {
+    if (ref.type === 'note') deleteNoteCard(ref.id);
+    else if (ref.type === 'arap') deleteArApCard(ref.id);
+    else if (ref.type === 'advance') deleteAdvanceCard(ref.id);
+    else if (ref.type === 'amort') deleteAmortizationCard(ref.id);
   }
 
   // 該筆分錄行是否「已選科目但缺少必填欄位」，回傳具體錯誤訊息；未選科目（空白列）回傳 null 視為可略過
@@ -670,52 +785,86 @@ export default function JournalEntryTab() {
       }
       if (account?.isNoteAccount) {
         if (isNoteIncreaseLine(account, side)) {
-          const newId = addNoteCard(account.id, {
+          const cardFields = {
             party: l.party.trim(),
             amount: Number(l.amount),
             noteNumber: l.noteNumber.trim(),
             issueDate: l.issueDate,
             dueDate: l.dueDate,
             bankAccount: l.bankAccount.trim(),
-          });
+          };
+          const reuseId = l.noteId && noteCards.some((c) => c.id === l.noteId) ? l.noteId : null;
+          if (reuseId) {
+            updateNoteCard(reuseId, cardFields);
+            return { ...base, noteId: reuseId };
+          }
+          const newId = addNoteCard(account.id, cardFields);
           return { ...base, noteId: newId };
         }
         return { ...base, noteId: l.noteId };
       }
       if (account?.isArApAccount) {
         if (isArApIncreaseLine(account, side)) {
-          const newId = addArApCard(account.id, { party: l.party.trim(), amount: Number(l.amount) });
+          const cardFields = { party: l.party.trim(), amount: Number(l.amount) };
+          const reuseId = l.arApId && arApCards.some((c) => c.id === l.arApId) ? l.arApId : null;
+          if (reuseId) {
+            updateArApCard(reuseId, cardFields);
+            return { ...base, arApId: reuseId };
+          }
+          const newId = addArApCard(account.id, cardFields);
           return { ...base, arApId: newId };
         }
         return { ...base, arApId: l.arApId };
       }
       if (account?.isAdvanceAccount) {
         if (isAdvanceIncreaseLine(account, side)) {
-          const newId = addAdvanceCard(account.id, { party: l.party.trim(), amount: Number(l.amount) });
+          const cardFields = { party: l.party.trim(), amount: Number(l.amount) };
+          const reuseId = l.advanceId && advanceCards.some((c) => c.id === l.advanceId) ? l.advanceId : null;
+          if (reuseId) {
+            updateAdvanceCard(reuseId, cardFields);
+            return { ...base, advanceId: reuseId };
+          }
+          const newId = addAdvanceCard(account.id, cardFields);
           return { ...base, advanceId: newId };
         }
         return { ...base, advanceId: l.advanceId };
       }
       if (account?.isAmortizedAccount && isAmortizedIncreaseLine(account, side)) {
-        const newId = addAmortizationCard(account.id, {
+        const cardFields = {
           name: l.amortName.trim(),
           party: l.party.trim(),
           untaxedAmount: Number(l.amount),
           taxAmount: Number(l.amortTaxAmount) || 0,
           startDate: l.amortStartDate,
           months: Number(l.amortMonths) || 0,
-        });
+        };
+        const reuseId = l.amortizationId && amortizationCards.some((c) => c.id === l.amortizationId) ? l.amortizationId : null;
+        if (reuseId) {
+          updateAmortizationCard(reuseId, cardFields);
+          return { ...base, amortizationId: reuseId };
+        }
+        const newId = addAmortizationCard(account.id, cardFields);
         return { ...base, amortizationId: newId };
       }
       return base;
     }
 
-    addEntry({
-      date,
-      description: description.trim(),
-      debits: validDebits.map((l) => toLine(l, 'debit')),
-      credits: validCredits.map((l) => toLine(l, 'credit')),
-    });
+    const newDebits = validDebits.map((l) => toLine(l, 'debit'));
+    const newCredits = validCredits.map((l) => toLine(l, 'credit'));
+
+    if (editingId) {
+      const original = entries.find((e) => e.id === editingId);
+      const oldRefs = collectCreatedCardRefs(original?.debits, 'debit').concat(
+        collectCreatedCardRefs(original?.credits, 'credit')
+      );
+      const newRefs = collectCreatedCardRefs(newDebits, 'debit').concat(collectCreatedCardRefs(newCredits, 'credit'));
+      oldRefs
+        .filter((old) => !newRefs.some((nr) => nr.type === old.type && nr.id === old.id))
+        .forEach(deleteCardRef);
+      updateEntry(editingId, { date, description: description.trim(), debits: newDebits, credits: newCredits });
+    } else {
+      addEntry({ date, description: description.trim(), debits: newDebits, credits: newCredits });
+    }
     resetForm();
   }
 
@@ -767,6 +916,7 @@ export default function JournalEntryTab() {
   return (
     <div>
       <h2>分錄輸入</h2>
+      {editingId && <p className="hint-text">正在編輯既有分錄，儲存後會直接覆蓋原本這一筆，不會新增一筆或改變在列表中的位置。</p>}
       <form className="entry-form" onSubmit={handleSubmit}>
         <div className="entry-header">
           <label>
@@ -836,8 +986,13 @@ export default function JournalEntryTab() {
         {error && <p className="error-text">{error}</p>}
 
         <button type="submit" disabled={!balanced}>
-          儲存分錄
+          {editingId ? '更新分錄' : '儲存分錄'}
         </button>
+        {editingId && (
+          <button type="button" onClick={cancelEdit}>
+            取消編輯
+          </button>
+        )}
       </form>
 
       <h3>已登錄分錄</h3>
@@ -859,7 +1014,10 @@ export default function JournalEntryTab() {
               <td>{entry.debits.map(renderLine)}</td>
               <td>{entry.credits.map(renderLine)}</td>
               <td>
-                <button onClick={() => deleteEntry(entry.id)}>刪除</button>
+                <div className="action-buttons">
+                  <button type="button" onClick={() => startEdit(entry)}>編輯</button>
+                  <button type="button" onClick={() => deleteEntry(entry.id)}>刪除</button>
+                </div>
               </td>
             </tr>
           ))}

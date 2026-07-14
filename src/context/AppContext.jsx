@@ -313,6 +313,10 @@ export function AppProvider({ children }) {
     setEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
+  function updateEntry(id, patch) {
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  }
+
   // 【修改八】建立/覆蓋期初資產負債表快照：把「當下」的科目與開帳金額深拷貝凍結起來，
   // 之後不論科目設定、開帳金額、或分錄如何變動，這份快照都不會跟著改變，
   // 「期初資產負債表」永遠只讀這份快照，不會每次重新從即時資料算
@@ -386,6 +390,7 @@ export function AppProvider({ children }) {
     deleteAmortizationCard,
     addEntry,
     deleteEntry,
+    updateEntry,
     finalizeOpening,
     importData,
     loadStandardAccounts,
