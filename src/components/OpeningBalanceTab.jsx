@@ -141,85 +141,113 @@ function FixedAssetOpeningEditor({ account }) {
       <h4>
         {account.code} {account.name} － 資產卡{isLand ? '（土地不提折舊）' : ''}
       </h4>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>資產名稱</th>
-            <th>取得日期</th>
-            <th>成本</th>
-            {!isLand && (
-              <>
-                <th>殘值</th>
-                <th>耐用年限</th>
-                <th>折舊方法</th>
-                <th>累計折舊（既有金額）</th>
-                <th>理論年折舊（參考）</th>
-              </>
-            )}
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cards.map((card) => (
-            <tr key={card.id}>
-              <td>
-                <input
-                  value={card.name}
-                  placeholder="資產名稱"
-                  onChange={(e) => updateFixedAssetCard(card.id, { name: e.target.value })}
-                />
-              </td>
-              <td>
-                <input
-                  type="date"
-                  value={card.acquisitionDate}
-                  onChange={(e) => updateFixedAssetCard(card.id, { acquisitionDate: e.target.value })}
-                />
-              </td>
-              <td>{numField(card, 'cost')}</td>
+      <div className="amortization-card-tables">
+      <div className="table-scroll">
+        <table className="data-table amortization-table">
+          <thead>
+            <tr>
+              <th>資產名稱</th>
+              <th>取得日期</th>
+              <th>成本</th>
               {!isLand && (
                 <>
-                  <td>{numField(card, 'residualValue')}</td>
-                  <td>{numField(card, 'usefulLife')}</td>
-                  <td>
-                    <select
-                      value={card.depreciationMethod}
-                      onChange={(e) => updateFixedAssetCard(card.id, { depreciationMethod: e.target.value })}
-                    >
-                      {DEPRECIATION_METHODS.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>{numField(card, 'openingAccumulatedDepreciation')}</td>
-                  <td className="num-cell">{formatNumber(computeAnnualDepreciation(card))}</td>
+                  <th>殘值</th>
+                  <th>耐用年限</th>
+                  <th>折舊方法</th>
                 </>
               )}
-              <td>
-                <button type="button" onClick={() => deleteFixedAssetCard(card.id)}>
-                  刪除
-                </button>
-              </td>
             </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr>
-            <th colSpan={2}>合計</th>
-            <th className="num-cell">{formatNumber(totalCost)}（＝開帳借方金額）</th>
-            {!isLand && (
-              <>
-                <th colSpan={3}></th>
+          </thead>
+          <tbody>
+            {cards.map((card) => (
+              <tr key={card.id}>
+                <td>
+                  <input
+                    value={card.name}
+                    placeholder="資產名稱"
+                    onChange={(e) => updateFixedAssetCard(card.id, { name: e.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="date"
+                    value={card.acquisitionDate}
+                    onChange={(e) => updateFixedAssetCard(card.id, { acquisitionDate: e.target.value })}
+                  />
+                </td>
+                <td>{numField(card, 'cost')}</td>
+                {!isLand && (
+                  <>
+                    <td>{numField(card, 'residualValue')}</td>
+                    <td>{numField(card, 'usefulLife')}</td>
+                    <td>
+                      <select
+                        value={card.depreciationMethod}
+                        onChange={(e) => updateFixedAssetCard(card.id, { depreciationMethod: e.target.value })}
+                      >
+                        {DEPRECIATION_METHODS.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colSpan={2}>合計</th>
+              <th className="num-cell">{formatNumber(totalCost)}（＝開帳借方金額）</th>
+              {!isLand && <th colSpan={3}></th>}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div className="table-scroll">
+        <table className="data-table amortization-table">
+          <thead>
+            <tr>
+              {!isLand && (
+                <>
+                  <th>累計折舊（既有金額）</th>
+                  <th>理論年折舊（參考）</th>
+                </>
+              )}
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cards.map((card) => (
+              <tr key={card.id}>
+                {!isLand && (
+                  <>
+                    <td>{numField(card, 'openingAccumulatedDepreciation')}</td>
+                    <td className="num-cell">{formatNumber(computeAnnualDepreciation(card))}</td>
+                  </>
+                )}
+                <td>
+                  <button type="button" onClick={() => deleteFixedAssetCard(card.id)}>
+                    刪除
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          {!isLand && (
+            <tfoot>
+              <tr>
                 <th className="num-cell">{formatNumber(totalAccumDep)}（＝配對科目開帳貸方金額）</th>
                 <th></th>
-              </>
-            )}
-            <th></th>
-          </tr>
-        </tfoot>
-      </table>
+                <th></th>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+      </div>
       <button type="button" onClick={() => addFixedAssetCard(account.id)}>
         + 新增資產卡
       </button>
@@ -319,7 +347,7 @@ function NoteOpeningEditor({ account }) {
         <table className="data-table note-card-table amortization-table">
           <thead>
             <tr>
-              {isPayable && <th>支票帳戶</th>}
+              {isPayable && <th className="col-bank-account">支票帳戶</th>}
               <th>操作</th>
             </tr>
           </thead>
@@ -327,9 +355,9 @@ function NoteOpeningEditor({ account }) {
             {cards.map((card) => (
               <tr key={card.id}>
                 {isPayable && (
-                  <td>
+                  <td className="col-bank-account">
                     <input
-                      className={isValidBankAccountCode(card.bankAccount) ? '' : 'input-warning'}
+                      className={isValidBankAccountCode(card.bankAccount) ? 'bank-account-input' : 'bank-account-input input-warning'}
                       value={card.bankAccount}
                       placeholder="請輸入科目代號，例如：1112"
                       onChange={(e) => updateNoteCard(card.id, { bankAccount: e.target.value })}

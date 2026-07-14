@@ -406,6 +406,15 @@ tr.add-child-row button {
   color: var(--text-secondary);
 }
 
+.col-bank-account {
+  width: 240px;
+}
+
+.bank-account-input {
+  width: 100%;
+  min-width: 220px;
+}
+
 .amortization-card-tables {
   margin: 12px 0 20px;
 }
