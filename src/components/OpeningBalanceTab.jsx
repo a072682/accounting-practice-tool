@@ -248,8 +248,9 @@ function NoteOpeningEditor({ account }) {
       <h4>
         {account.code} {account.name} － 票據明細卡
       </h4>
+      <div className="amortization-card-tables">
       <div className="table-scroll">
-        <table className="data-table note-card-table">
+        <table className="data-table note-card-table amortization-table">
           <thead>
             <tr>
               <th>對象</th>
@@ -257,8 +258,6 @@ function NoteOpeningEditor({ account }) {
               <th>票據號碼</th>
               <th>開票日</th>
               <th>到期日</th>
-              {isPayable && <th>支票帳戶</th>}
-              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -302,6 +301,31 @@ function NoteOpeningEditor({ account }) {
                     onChange={(e) => updateNoteCard(card.id, { dueDate: e.target.value })}
                   />
                 </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th>合計（＝該科目開帳{isPayable ? '貸方' : '借方'}金額）</th>
+              <th className="num-cell">{formatNumber(total)}</th>
+              <th></th>
+              <th></th>
+              <th></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div className="table-scroll">
+        <table className="data-table note-card-table amortization-table">
+          <thead>
+            <tr>
+              {isPayable && <th>支票帳戶</th>}
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cards.map((card) => (
+              <tr key={card.id}>
                 {isPayable && (
                   <td>
                     <input
@@ -323,14 +347,8 @@ function NoteOpeningEditor({ account }) {
               </tr>
             ))}
           </tbody>
-          <tfoot>
-            <tr>
-              <th colSpan={isPayable ? 5 : 4}>合計（＝該科目開帳{isPayable ? '貸方' : '借方'}金額）</th>
-              <th className="num-cell">{formatNumber(total)}</th>
-              <th></th>
-            </tr>
-          </tfoot>
         </table>
+      </div>
       </div>
       <button type="button" onClick={() => addNoteCard(account.id, { fromOpening: true })}>
         + 新增票據
