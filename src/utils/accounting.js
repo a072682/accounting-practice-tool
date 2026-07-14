@@ -586,6 +586,12 @@ export function amortizationRemaining(card) {
   return Math.max(base - amortizationAmortizedAmount(card), 0);
 }
 
+// 某一筆分錄借/貸方分錄行，對預付費用/預收收入科目而言是否為「新增攤銷明細卡」
+// 與科目正常餘額方向同側 → 新增一張攤銷卡；異側則無對應機制（攤銷/認列金額依日期自動試算，不透過分錄沖銷）
+export function isAmortizedIncreaseLine(account, side) {
+  return (side === 'debit') === isDebitNormal(account);
+}
+
 // 依科目彙總所有攤銷卡的剩餘餘額，作為該預付費用／預收收入科目的期初餘額
 export function computeAmortizationOpeningTotals(amortizationCards) {
   const totals = {};

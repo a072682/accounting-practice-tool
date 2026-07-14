@@ -507,8 +507,9 @@ function AmortizationOpeningEditor({ account }) {
       <h4>
         {account.code} {account.name} － 攤銷明細卡
       </h4>
+      <div className="amortization-card-tables">
       <div className="table-scroll">
-        <table className="data-table note-card-table">
+        <table className="data-table note-card-table amortization-table">
           <thead>
             <tr>
               <th>項目名稱</th>
@@ -518,9 +519,6 @@ function AmortizationOpeningEditor({ account }) {
               <th>生效日期</th>
               <th>攤銷期間（月）</th>
               <th>{isRevenueSide ? '每月應認列金額' : '每月攤銷金額'}</th>
-              <th>{isRevenueSide ? '已認列金額' : '已攤銷金額'}</th>
-              <th>{isRevenueSide ? '剩餘（未認列）餘額' : '剩餘餘額'}</th>
-              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -551,6 +549,23 @@ function AmortizationOpeningEditor({ account }) {
                 </td>
                 <td>{numField(card, 'months')}</td>
                 <td className="num-cell">{formatNumber(amortizationMonthlyAmount(card))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="table-scroll">
+        <table className="data-table note-card-table amortization-table">
+          <thead>
+            <tr>
+              <th>{isRevenueSide ? '已認列金額' : '已攤銷金額'}</th>
+              <th>{isRevenueSide ? '剩餘（未認列）餘額' : '剩餘餘額'}</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cards.map((card) => (
+              <tr key={card.id}>
                 <td>
                   <input
                     type="number"
@@ -575,14 +590,13 @@ function AmortizationOpeningEditor({ account }) {
           </tbody>
           <tfoot>
             <tr>
-              <th colSpan={isRevenueSide ? 8 : 7}>
-                合計（＝該科目開帳{isRevenueSide ? '貸方' : '借方'}金額）
-              </th>
+              <th>合計（＝該科目開帳{isRevenueSide ? '貸方' : '借方'}金額）</th>
               <th className="num-cell">{formatNumber(total)}</th>
               <th></th>
             </tr>
           </tfoot>
         </table>
+      </div>
       </div>
       <p className="hint-text">已攤銷／已認列金額留空時，會依生效日期與今日之間經過的月數自動試算；如需以特定基準日覆蓋，請直接輸入金額。</p>
       <button type="button" onClick={() => addAmortizationCard(account.id)}>

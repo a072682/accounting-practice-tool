@@ -10,6 +10,7 @@ import {
   formatNumber,
   inventoryAvgCost,
   isAdvanceIncreaseLine,
+  isAmortizedIncreaseLine,
   isArApIncreaseLine,
   isDebitNormal,
   isNoteIncreaseLine,
@@ -34,12 +35,29 @@ function emptyLine() {
     issueDate: '',
     dueDate: '',
     bankAccount: '',
+    amortName: '',
+    amortStartDate: '',
+    amortMonths: '',
+    amortTaxAmount: '',
+    note: '',
   };
 }
 
 // 是否為觸發「品項明細輸入模式」的科目：存貨（進貨/銷貨扣庫存）、銷貨收入（售價×數量）、銷貨成本（成本×數量）
 function isItemAccount(account) {
   return !!(account?.isInventory || account?.isSalesRevenueAccount || account?.isCogsAccount);
+}
+
+// 該科目是否已有專屬的明細卡輸入介面（存貨/銷貨品項、票據、應收應付帳款、預付/預收貨款、攤銷明細卡）
+// 有明細卡的科目已經有自己的欄位可供補充說明，不需要再顯示通用備註欄位，避免重複輸入介面
+function hasDetailCard(account) {
+  return !!(
+    isItemAccount(account) ||
+    account?.isNoteAccount ||
+    account?.isArApAccount ||
+    account?.isAdvanceAccount ||
+    account?.isAmortizedAccount
+  );
 }
 
 // mode: 'debit'（存貨＝進貨，增加存貨數量，單位成本可手動輸入；銷貨成本＝依目前加權平均單位成本自動計算）
@@ -81,6 +99,10 @@ function LineEditor({
             issueDate: '',
             dueDate: '',
             bankAccount: '',
+            amortName: '',
+            amortStartDate: '',
+            amortMonths: '',
+            amortTaxAmount: '',
             amount: isItemAccount(account) ? '' : merged.amount,
           };
         }
@@ -175,6 +197,11 @@ function LineEditor({
         const advanceSettleExceeded =
           advanceSettle && line.advanceId && Number(line.amount) - advanceSettleRemaining > 0.005;
 
+        // 預付費用/預收收入：與科目正常餘額方向同側＝新增一張攤銷明細卡（金額＝未稅金額，攤銷/認列依日期自動試算）
+        // 異側目前無沖銷機制，維持一般金額輸入
+        const amortizedIncrease = account?.isAmortizedAccount && isAmortizedIncreaseLine(account, mode);
+        const amortizedIsRevenueSide = amortizedIncrease && !isDebitNormal(account);
+
         return (
           <div className="line-row-group" key={idx}>
             <div className="line-row">
@@ -203,6 +230,16 @@ function LineEditor({
                 </button>
               )}
             </div>
+            {account && !hasDetailCard(account) && (
+              <div className="line-row">
+                <input
+                  className="note-input"
+                  placeholder="備註（選填）"
+                  value={line.note}
+                  onChange={(e) => updateLine(idx, { note: e.target.value })}
+                />
+              </div>
+            )}
             {isItemAccount(account) && (
               <div className="line-row inventory-line">
                 <select value={line.itemId} onChange={(e) => updateLine(idx, { itemId: e.target.value })}>
@@ -370,6 +407,46 @@ function LineEditor({
             {advanceSettleExceeded && (
               <p className="error-text">沖銷金額超過此對象未沖銷餘額（餘額 {formatNumber(advanceSettleRemaining)}）</p>
             )}
+
+            {amortizedIncrease && (
+              <div className="line-row inventory-line">
+                <input
+                  style={{ flex: 1, minWidth: 120 }}
+                  placeholder="項目名稱"
+                  value={line.amortName}
+                  onChange={(e) => updateLine(idx, { amortName: e.target.value })}
+                />
+                <input
+                  style={{ flex: 1, minWidth: 120 }}
+                  placeholder={amortizedIsRevenueSide ? '客戶名稱' : '對象（選填）'}
+                  value={line.party}
+                  onChange={(e) => updateLine(idx, { party: e.target.value })}
+                />
+                <input
+                  style={{ flex: 1, minWidth: 120 }}
+                  type="date"
+                  title="生效日期"
+                  value={line.amortStartDate}
+                  onChange={(e) => updateLine(idx, { amortStartDate: e.target.value })}
+                />
+                <input
+                  type="number"
+                  className="num-input"
+                  placeholder="攤銷期間（月）"
+                  value={line.amortMonths}
+                  onChange={(e) => updateLine(idx, { amortMonths: e.target.value })}
+                />
+                {amortizedIsRevenueSide && (
+                  <input
+                    type="number"
+                    className="num-input"
+                    placeholder="稅額"
+                    value={line.amortTaxAmount}
+                    onChange={(e) => updateLine(idx, { amortTaxAmount: e.target.value })}
+                  />
+                )}
+              </div>
+            )}
           </div>
         );
       })}
@@ -391,6 +468,8 @@ export default function JournalEntryTab() {
     addArApCard,
     advanceCards,
     addAdvanceCard,
+    amortizationCards,
+    addAmortizationCard,
     addEntry,
     deleteEntry,
   } = useApp();
@@ -442,6 +521,9 @@ export default function JournalEntryTab() {
       } else if (!line.advanceId) {
         return false;
       }
+    }
+    if (account.isAmortizedAccount && isAmortizedIncreaseLine(account, side)) {
+      if (!line.amortName.trim()) return false;
     }
     return true;
   }
@@ -555,7 +637,7 @@ export default function JournalEntryTab() {
 
     function toLine(l, side) {
       const account = accounts.find((a) => a.id === l.accountId);
-      const base = { accountId: l.accountId, amount: Number(l.amount) };
+      const base = { accountId: l.accountId, amount: Number(l.amount), note: hasDetailCard(account) ? '' : l.note.trim() };
       if (account?.isInventory || account?.isCogsAccount) {
         return { ...base, itemId: l.itemId, qty: Number(l.qty), unitCost: Number(l.unitCost) || 0 };
       }
@@ -589,6 +671,17 @@ export default function JournalEntryTab() {
           return { ...base, advanceId: newId };
         }
         return { ...base, advanceId: l.advanceId };
+      }
+      if (account?.isAmortizedAccount && isAmortizedIncreaseLine(account, side)) {
+        const newId = addAmortizationCard(account.id, {
+          name: l.amortName.trim(),
+          party: l.party.trim(),
+          untaxedAmount: Number(l.amount),
+          taxAmount: Number(l.amortTaxAmount) || 0,
+          startDate: l.amortStartDate,
+          months: Number(l.amortMonths) || 0,
+        });
+        return { ...base, amortizationId: newId };
       }
       return base;
     }
@@ -627,6 +720,11 @@ export default function JournalEntryTab() {
     return card ? card.party || '(未命名)' : '(已刪除對象)';
   }
 
+  function amortLabel(id) {
+    const card = amortizationCards.find((c) => c.id === id);
+    return card ? card.name || '(未命名)' : '(已刪除項目)';
+  }
+
   function renderLine(l, i) {
     return (
       <div key={i}>
@@ -634,7 +732,9 @@ export default function JournalEntryTab() {
         {l.itemId ? ` ［${itemLabel(l.itemId)} x ${formatNumber(l.qty)}］` : ''}
         {l.noteId ? ` ［${noteLabel(l.noteId)}］` : ''}
         {l.arApId ? ` ［${arApLabel(l.arApId)}］` : ''}
-        {l.advanceId ? ` ［${advanceLabel(l.advanceId)}］` : ''}{' '}
+        {l.advanceId ? ` ［${advanceLabel(l.advanceId)}］` : ''}
+        {l.amortizationId ? ` ［${amortLabel(l.amortizationId)}］` : ''}
+        {l.note ? ` ［${l.note}］` : ''}{' '}
         <span className="num-cell">{formatNumber(l.amount)}</span>
       </div>
     );
@@ -662,6 +762,8 @@ export default function JournalEntryTab() {
           進行銷貨時建議同時登錄四列：借方應收帳款/現金、借方銷貨成本、貸方銷貨收入、貸方存貨。
           當借貸方選到應收/應付票據、應收/應付帳款、或預付/預收貨款科目時：與科目正常餘額方向同側＝新增票據、客戶/廠商欠款或預付/預收款項（填入對象等欄位），
           異側＝沖銷既有票據、欠款或預付/預收款項（選擇特定對象，可部分沖銷）。
+          當借貸方選到預付費用/預收收入科目（啟用攤銷明細卡）時：與科目正常餘額方向同側＝新增一張攤銷明細卡（填入項目名稱、對象、生效日期、攤銷期間），
+          金額即為卡片的未稅金額；攤銷/認列金額依生效日期自動試算，不透過分錄沖銷，如需調整已攤銷金額請至「開帳作業」分頁的攤銷明細卡修改。
         </p>
 
         <div className="entry-lines">

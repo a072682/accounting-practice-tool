@@ -342,7 +342,7 @@ tr.add-child-row button {
 
 .entry-lines {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 20px;
   margin-bottom: 12px;
 }
@@ -381,14 +381,41 @@ tr.add-child-row button {
   border-bottom: none;
 }
 
+.inventory-line {
+  flex-wrap: wrap;
+}
+
 .inventory-line select,
 .inventory-line .num-input {
   flex: 1;
+  min-width: 120px;
 }
 
 .inventory-line .hint-text {
   flex: 2;
   margin: 0;
+}
+
+.note-input {
+  width: 100%;
+  padding: 3px 8px;
+  font-size: 0.85em;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.amortization-card-tables {
+  margin: 12px 0 20px;
+}
+
+.amortization-card-tables .amortization-table {
+  margin: 0;
+}
+
+.amortization-card-tables .table-scroll + .table-scroll {
+  margin-top: -1px;
 }
 
 .inventory-editors {

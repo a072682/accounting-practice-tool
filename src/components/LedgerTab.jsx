@@ -21,6 +21,10 @@ export default function LedgerTab() {
     return card ? ` ［${card.party || '(未命名)'}／${card.noteNumber || '(無號碼)'}］` : ' ［已刪除票據］';
   }
 
+  function remarkInfo(line) {
+    return line.note ? ` ［${line.note}］` : '';
+  }
+
   const rows = [];
   if (account) {
     let running = openingNetBalance(account, openingBalances);
@@ -36,7 +40,7 @@ export default function LedgerTab() {
             running += debitNormal ? Number(d.amount) : -Number(d.amount);
             rows.push({
               date: entry.date,
-              description: entry.description + itemInfo(d) + noteInfo(d),
+              description: entry.description + itemInfo(d) + noteInfo(d) + remarkInfo(d),
               debit: Number(d.amount),
               credit: null,
               balance: running,
@@ -48,7 +52,7 @@ export default function LedgerTab() {
             running += debitNormal ? -Number(c.amount) : Number(c.amount);
             rows.push({
               date: entry.date,
-              description: entry.description + itemInfo(c) + noteInfo(c),
+              description: entry.description + itemInfo(c) + noteInfo(c) + remarkInfo(c),
               debit: null,
               credit: Number(c.amount),
               balance: running,
