@@ -497,46 +497,70 @@ export default function JournalEntryTab() {
     setError('');
   }
 
-  function isValidLine(line, side) {
+  // 該筆分錄行是否「已選科目但缺少必填欄位」，回傳具體錯誤訊息；未選科目（空白列）回傳 null 視為可略過
+  function lineIssue(line, side) {
     const account = accounts.find((a) => a.id === line.accountId);
-    if (!account || !(Number(line.amount) > 0)) return false;
-    if (isItemAccount(account) && (!line.itemId || !(Number(line.qty) > 0))) return false;
+    if (!account) return null;
+    const label = `${account.code} ${account.name}`;
+    if (!(Number(line.amount) > 0)) return `「${label}」尚未輸入金額`;
+    if (isItemAccount(account)) {
+      if (!line.itemId) return `「${label}」尚未選擇品項`;
+      if (!(Number(line.qty) > 0)) return `「${label}」尚未輸入數量`;
+    }
     if (account.isNoteAccount) {
       if (isNoteIncreaseLine(account, side)) {
-        if (!line.party.trim()) return false;
+        if (!line.party.trim()) return `「${label}」尚未輸入${isDebitNormal(account) ? '客戶' : '廠商'}名稱`;
       } else if (!line.noteId) {
-        return false;
+        return `「${label}」尚未選擇要沖銷的票據`;
       }
     }
     if (account.isArApAccount) {
       if (isArApIncreaseLine(account, side)) {
-        if (!line.party.trim()) return false;
+        if (!line.party.trim()) return `「${label}」尚未輸入${isDebitNormal(account) ? '客戶' : '廠商'}名稱`;
       } else if (!line.arApId) {
-        return false;
+        return `「${label}」尚未選擇要${isDebitNormal(account) ? '收款' : '付款'}沖銷的對象`;
       }
     }
     if (account.isAdvanceAccount) {
       if (isAdvanceIncreaseLine(account, side)) {
-        if (!line.party.trim()) return false;
+        if (!line.party.trim()) return `「${label}」尚未輸入對象名稱`;
       } else if (!line.advanceId) {
-        return false;
+        return `「${label}」尚未選擇要沖銷的對象`;
       }
     }
     if (account.isAmortizedAccount && isAmortizedIncreaseLine(account, side)) {
-      if (!line.amortName.trim()) return false;
+      if (!line.amortName.trim()) return `「${label}」尚未輸入項目名稱`;
     }
-    return true;
+    return null;
+  }
+
+  function isValidLine(line, side) {
+    return !!accounts.find((a) => a.id === line.accountId) && !lineIssue(line, side);
   }
 
   function handleSubmit(e) {
     e.preventDefault();
-    const validDebits = debits.filter((l) => isValidLine(l, 'debit'));
-    const validCredits = credits.filter((l) => isValidLine(l, 'credit'));
 
     if (!description.trim()) {
       setError('請輸入摘要說明');
       return;
     }
+
+    // 逐筆檢查已選科目但漏填必要欄位的分錄行，避免無聲無息地被略過而不提示原因
+    for (const { l, side } of [
+      ...debits.map((l) => ({ l, side: 'debit' })),
+      ...credits.map((l) => ({ l, side: 'credit' })),
+    ]) {
+      const issue = lineIssue(l, side);
+      if (issue) {
+        setError(issue);
+        return;
+      }
+    }
+
+    const validDebits = debits.filter((l) => isValidLine(l, 'debit'));
+    const validCredits = credits.filter((l) => isValidLine(l, 'credit'));
+
     if (validDebits.length === 0 || validCredits.length === 0) {
       setError('借方與貸方至少各需一筆有效分錄');
       return;
