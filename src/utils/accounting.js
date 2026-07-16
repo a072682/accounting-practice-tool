@@ -592,10 +592,12 @@ export function isAmortizedIncreaseLine(account, side) {
   return (side === 'debit') === isDebitNormal(account);
 }
 
-// 依科目彙總所有攤銷卡的剩餘餘額，作為該預付費用／預收收入科目的期初餘額
+// 依科目彙總「開帳時建立」的攤銷卡剩餘餘額，作為該預付費用／預收收入科目的期初餘額
+// 分錄登錄時新增的卡（fromOpening 為 false）不計入期初餘額，其金額已經由該筆分錄自身反映在借貸金額中
 export function computeAmortizationOpeningTotals(amortizationCards) {
   const totals = {};
   amortizationCards.forEach((card) => {
+    if (!card.fromOpening) return;
     totals[card.accountId] = (totals[card.accountId] || 0) + amortizationRemaining(card);
   });
   return totals;

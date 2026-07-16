@@ -291,6 +291,7 @@ export function AppProvider({ children }) {
       startDate: '',
       months: 0,
       amortizedOverride: null,
+      fromOpening: false,
       ...card,
     };
     setAmortizationCards((prev) => [...prev, newCard]);

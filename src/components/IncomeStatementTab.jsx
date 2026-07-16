@@ -47,7 +47,26 @@ function SubtotalRow({ label, amount, emphasize }) {
   );
 }
 
-// 損益表七層結構：營業收入 → 營業成本 →【毛利】→ 營業費用 →【營業利益】→ 營業外收支 →【稅前淨利】
+// 所得稅費用：本工具未計算所得稅，固定顯示為 0，但仍獨立列示這一層，
+// 讓使用者清楚知道這是損益表的標準結構之一，不是被省略或遺漏
+function IncomeTaxExpenseSection() {
+  return (
+    <div>
+      <h3>所得稅費用</h3>
+      <table className="data-table">
+        <tbody>
+          <tr>
+            <td colSpan={2}>本期所得稅費用（本工具未計算所得稅，固定為 0）</td>
+            <td className="num-cell">{formatNumber(0)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// 損益表九層結構：營業收入 → 營業成本 →【毛利】→ 營業費用 →【營業利益】→
+// 營業外收支 →【稅前淨利】→ 所得稅費用 →【本期淨利】
 function IncomeStatementView({ accounts, balances, hideZero }) {
   const revenue = buildSection(accounts, balances, ['41'], hideZero);
   const cost = buildSection(accounts, balances, ['51'], hideZero);
@@ -59,6 +78,8 @@ function IncomeStatementView({ accounts, balances, hideZero }) {
   const operatingIncome = grossProfit - expense.total;
   const nonOperatingNet = nonOpRevenue.total - nonOpExpense.total;
   const netIncomeBeforeTax = operatingIncome + nonOperatingNet;
+  const incomeTaxExpense = 0;
+  const netIncome = netIncomeBeforeTax - incomeTaxExpense;
 
   return (
     <div className="income-statement">
@@ -108,7 +129,11 @@ function IncomeStatementView({ accounts, balances, hideZero }) {
 
       <SubtotalRow label="營業外收支" amount={nonOperatingNet} />
 
-      <SubtotalRow label="稅前淨利（本期淨利）" amount={netIncomeBeforeTax} emphasize />
+      <SubtotalRow label="稅前淨利" amount={netIncomeBeforeTax} emphasize />
+
+      <IncomeTaxExpenseSection />
+
+      <SubtotalRow label="本期淨利" amount={netIncome} emphasize />
     </div>
   );
 }

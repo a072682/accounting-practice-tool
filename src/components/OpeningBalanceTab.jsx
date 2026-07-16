@@ -645,7 +645,7 @@ function AmortizationOpeningEditor({ account }) {
       </div>
       </div>
       <p className="hint-text">已攤銷／已認列金額留空時，會依生效日期與今日之間經過的月數自動試算；如需以特定基準日覆蓋，請直接輸入金額。</p>
-      <button type="button" onClick={() => addAmortizationCard(account.id)}>
+      <button type="button" onClick={() => addAmortizationCard(account.id, { fromOpening: true })}>
         + 新增項目
       </button>
     </div>
