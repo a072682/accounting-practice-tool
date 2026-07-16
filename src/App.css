@@ -311,6 +311,25 @@ tr.add-child-row button {
   margin: 4px 0;
 }
 
+.income-subtotal-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  margin: 4px 0 20px;
+  border-top: 2px solid var(--border-soft);
+  border-bottom: 2px solid var(--border-soft);
+  background: var(--bg-surface-alt);
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 1.02rem;
+}
+
+.income-subtotal-box.income-final {
+  font-size: 1.15rem;
+  background: var(--bg-hover);
+}
+
 .entry-form {
   border: 1px solid var(--border-soft);
   border-radius: 6px;
