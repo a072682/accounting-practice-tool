@@ -280,6 +280,25 @@ export function computeDisplayTreeOpeningTotals(tree, openingBalances) {
   tree.forEach(walk);
   return result;
 }
+// 遞迴計算顯示樹每個節點的「金額」小計：明細科目＝amountByAccountId 中的自身金額；
+// 彙總科目／顯示分類群組＝其下所有明細科目金額的加總（逐層往上疊加，不限深度）。
+// 用於資產負債表等報表，讓彙總科目（如流動負債）也能顯示小計，供 UI 展開/收合呈現。
+// 回傳的 map 以真實科目用 account.id 為 key、顯示分類群組用其 key 為 key。
+export function computeDisplayTreeAmountTotals(tree, amountByAccountId) {
+  const result = {};
+  function walk(node) {
+    if (node.kind === 'account' && !node.account.isSummary) {
+      const amount = amountByAccountId[node.account.id] || 0;
+      result[node.account.id] = amount;
+      return amount;
+    }
+    const total = node.children.reduce((sum, child) => sum + walk(child), 0);
+    result[node.kind === 'account' ? node.account.id : node.key] = total;
+    return total;
+  }
+  tree.forEach(walk);
+  return result;
+}
 // ============================================================
 // 【修改六結束】
 // ============================================================

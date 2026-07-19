@@ -1,18 +1,98 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { computeEndingBalances, formatNumber, sortAccountsByCode, sumByTypes, typeSignedBalance } from '../utils/accounting';
+import {
+  buildDisplayTree,
+  computeDisplayTreeAmountTotals,
+  computeEndingBalances,
+  formatNumber,
+  sumByTypes,
+  typeSignedBalance,
+} from '../utils/accounting';
+import AccountTreeRows from './AccountTreeRows';
+
+// 顯示分類樹的最外層（1xxx 資產／2xxx 負債／3xxx 權益…）與資產負債表本來就分成
+// 「資產／負債／權益」三欄的標題重複，這裡把最外層拆掉，只保留有意義的中層分類
+// （流動資產、非流動資產、流動負債…）與其下的彙總/明細科目
+function buildTypeTree(accounts) {
+  return buildDisplayTree(accounts).flatMap((node) => (node.kind === 'group' ? node.children : [node]));
+}
+
+// hideZero 時，把金額為零的明細科目連同因此變空的彙總分支一併移除，
+// 避免出現「展開後底下空空如也」的彙總科目
+function pruneZeroBranches(tree, totals) {
+  function prune(node) {
+    if (node.kind === 'account' && !node.account.isSummary) {
+      return Math.abs(totals[node.account.id] || 0) > 0.005 ? node : null;
+    }
+    const children = node.children.map(prune).filter(Boolean);
+    if (children.length === 0) return null;
+    return { ...node, children };
+  }
+  return tree.map(prune).filter(Boolean);
+}
 
 // 資產負債表的實際內容：接收「哪一份科目清單＋開帳金額＋分錄」算出的餘額後渲染，
 // 期初／期末兩種視圖共用同一套呈現邏輯，差別只在傳入的資料來源
 function BalanceSheetView({ accounts, balances, hideZero }) {
+  // 收合狀態以彙總科目代號／顯示分類群組 key 追蹤，三個區塊（資產/負債/權益）共用同一份即可，
+  // 因為代號與群組 key 在整份科目表中不會重複
+  const [collapsedKeys, setCollapsedKeys] = useState(() => new Set());
+  function toggleCollapse(key) {
+    setCollapsedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   // 顯示金額：依科目所屬分類（資產/負債/權益）換算正負號，讓備抵損失、累計折舊等抵銷科目
   // 顯示為負值（減項），與「資產總計」等總計的計算方式保持一致
   const displayAmount = (acc) => typeSignedBalance(acc, balances[acc.id] || 0);
-  const nonZero = (acc) => !hideZero || Math.abs(displayAmount(acc)) > 0.005;
+  const amountByAccountId = {};
+  accounts.forEach((acc) => {
+    amountByAccountId[acc.id] = displayAmount(acc);
+  });
 
-  const assets = sortAccountsByCode(accounts.filter((a) => a.type === '資產' && !a.isSummary)).filter(nonZero);
-  const liabilities = sortAccountsByCode(accounts.filter((a) => a.type === '負債' && !a.isSummary)).filter(nonZero);
-  const equities = sortAccountsByCode(accounts.filter((a) => a.type === '權益' && !a.isSummary)).filter(nonZero);
+  function buildRenderedTree(type) {
+    const tree = buildTypeTree(accounts.filter((a) => a.type === type));
+    const totals = computeDisplayTreeAmountTotals(tree, amountByAccountId);
+    return { tree: hideZero ? pruneZeroBranches(tree, totals) : tree, totals };
+  }
+
+  const assetTree = buildRenderedTree('資產');
+  const liabilityTree = buildRenderedTree('負債');
+  const equityTree = buildRenderedTree('權益');
+
+  function renderTreeRows({ tree, totals }) {
+    return (
+      <AccountTreeRows
+        tree={tree}
+        collapsedKeys={collapsedKeys}
+        onToggle={toggleCollapse}
+        renderGroupCells={(node) => (
+          <>
+            <td className="col-name" data-label="名稱">
+              {node.label}
+            </td>
+            <td className="num-cell" data-label="金額">
+              {formatNumber(totals[node.key] || 0)}
+            </td>
+          </>
+        )}
+        renderAccountCells={(acc) => (
+          <>
+            <td className="col-name" data-label="名稱">
+              {acc.name}
+            </td>
+            <td className="num-cell" data-label="金額">
+              {formatNumber(totals[acc.id] || 0)}
+            </td>
+          </>
+        )}
+      />
+    );
+  }
 
   const assetTotal = sumByTypes(accounts, balances, ['資產']);
   const liabilityTotal = sumByTypes(accounts, balances, ['負債']);
@@ -31,16 +111,8 @@ function BalanceSheetView({ accounts, balances, hideZero }) {
       <div className="bs-columns">
         <div>
           <h3>資產</h3>
-          <table className="data-table">
-            <tbody>
-              {assets.map((acc) => (
-                <tr key={acc.id}>
-                  <td>{acc.code}</td>
-                  <td>{acc.name}</td>
-                  <td className="num-cell">{formatNumber(displayAmount(acc))}</td>
-                </tr>
-              ))}
-            </tbody>
+          <table className="data-table responsive-tree-table">
+            <tbody>{renderTreeRows(assetTree)}</tbody>
             <tfoot>
               <tr>
                 <th colSpan={2}>資產總計</th>
@@ -52,16 +124,8 @@ function BalanceSheetView({ accounts, balances, hideZero }) {
 
         <div>
           <h3>負債</h3>
-          <table className="data-table">
-            <tbody>
-              {liabilities.map((acc) => (
-                <tr key={acc.id}>
-                  <td>{acc.code}</td>
-                  <td>{acc.name}</td>
-                  <td className="num-cell">{formatNumber(displayAmount(acc))}</td>
-                </tr>
-              ))}
-            </tbody>
+          <table className="data-table responsive-tree-table">
+            <tbody>{renderTreeRows(liabilityTree)}</tbody>
             <tfoot>
               <tr>
                 <th colSpan={2}>負債總計</th>
@@ -71,19 +135,14 @@ function BalanceSheetView({ accounts, balances, hideZero }) {
           </table>
 
           <h3>權益</h3>
-          <table className="data-table">
+          <table className="data-table responsive-tree-table">
             <tbody>
-              {equities.map((acc) => (
-                <tr key={acc.id}>
-                  <td>{acc.code}</td>
-                  <td>{acc.name}</td>
-                  <td className="num-cell">{formatNumber(displayAmount(acc))}</td>
-                </tr>
-              ))}
+              {renderTreeRows(equityTree)}
               {(!hideZero || Math.abs(netIncome) > 0.005) && (
                 <tr>
-                  <td colSpan={2}>本期淨利（併入權益）</td>
-                  <td className="num-cell">{formatNumber(netIncome)}</td>
+                  <td className="tree-code-cell col-code" data-label="代號"></td>
+                  <td className="col-name" data-label="名稱">本期淨利（併入權益）</td>
+                  <td className="num-cell" data-label="金額">{formatNumber(netIncome)}</td>
                 </tr>
               )}
             </tbody>
